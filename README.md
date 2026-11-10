@@ -14,7 +14,8 @@ Schermo intero: tasto **F** oppure doppio clic sulla pagina (per togliere anche 
 | Nome | Valore |
 |---|---|
 | `SHOPIFY_SHOP` | `b70fa5-2.myshopify.com` |
-| `SHOPIFY_TOKEN` | token "Admin API access token" di un'app personalizzata Shopify con il solo permesso `read_reports` |
+| `SHOPIFY_CLIENT_ID` | ID client dell'app "Inkasa Dashboard" (Dev Dashboard, permessi `read_reports`, `read_orders`) |
+| `SHOPIFY_CLIENT_SECRET` | Segreto client della stessa app |
 | `META_TOKEN` | token di un utente di sistema del Business Manager con permesso `ads_read` sull'account INKASA |
 | `META_AD_ACCOUNT` | `1797943081369913` |
 

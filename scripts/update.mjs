@@ -1,7 +1,8 @@
 // Aggiorna data.json con i dati di Shopify e Meta Ads. Girato da GitHub Actions ogni 15 minuti.
 import fs from 'node:fs';
 
-const {SHOPIFY_SHOP, SHOPIFY_TOKEN, META_TOKEN, META_AD_ACCOUNT} = process.env;
+const {SHOPIFY_SHOP, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET, META_TOKEN, META_AD_ACCOUNT} = process.env;
+let SHOPIFY_TOKEN = process.env.SHOPIFY_TOKEN || ''; // facoltativo: se manca lo ottengo da client id + secret
 const SHOPIFY_API = process.env.SHOPIFY_API_VERSION || '2026-07';
 const META_API = process.env.META_API_VERSION || ''; // vuoto = versione predefinita di Meta
 const FILE = new URL('../data.json', import.meta.url);
@@ -10,7 +11,20 @@ const vecchio = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, 'utf8')) 
 const risposte = {...vecchio.answers};
 const errori = [];
 
+async function tokenShopify() {
+  if (SHOPIFY_TOKEN) return SHOPIFY_TOKEN;
+  const r = await fetch(`https://${SHOPIFY_SHOP}/admin/oauth/access_token`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({client_id: SHOPIFY_CLIENT_ID, client_secret: SHOPIFY_CLIENT_SECRET, grant_type: 'client_credentials'}),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.access_token) throw new Error('Shopify token: ' + r.status + ' ' + JSON.stringify(j).slice(0, 200));
+  SHOPIFY_TOKEN = j.access_token;
+  return SHOPIFY_TOKEN;
+}
+
 async function shopifyql(query) {
+  await tokenShopify();
   const r = await fetch(`https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API}/graphql.json`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_TOKEN},
@@ -43,8 +57,8 @@ const compiti = {
   meta_giorni: meta,
 };
 const servono = {
-  shopify_giorni: ['SHOPIFY_SHOP', 'SHOPIFY_TOKEN'], shopify_totale: ['SHOPIFY_SHOP', 'SHOPIFY_TOKEN'],
-  ordini_citta: ['SHOPIFY_SHOP', 'SHOPIFY_TOKEN'], meta_giorni: ['META_TOKEN', 'META_AD_ACCOUNT'],
+  shopify_giorni: ['SHOPIFY_SHOP', 'SHOPIFY_CLIENT_ID', 'SHOPIFY_CLIENT_SECRET'], shopify_totale: ['SHOPIFY_SHOP', 'SHOPIFY_CLIENT_ID', 'SHOPIFY_CLIENT_SECRET'],
+  ordini_citta: ['SHOPIFY_SHOP', 'SHOPIFY_CLIENT_ID', 'SHOPIFY_CLIENT_SECRET'], meta_giorni: ['META_TOKEN', 'META_AD_ACCOUNT'],
 };
 
 for (const [id, fn] of Object.entries(compiti)) {

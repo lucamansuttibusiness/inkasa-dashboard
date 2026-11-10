@@ -25,7 +25,8 @@ jobs:
         continue-on-error: true
         env:
           SHOPIFY_SHOP: ${{ secrets.SHOPIFY_SHOP }}
-          SHOPIFY_TOKEN: ${{ secrets.SHOPIFY_TOKEN }}
+          SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
+          SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
           META_TOKEN: ${{ secrets.META_TOKEN }}
           META_AD_ACCOUNT: ${{ secrets.META_AD_ACCOUNT }}
         run: node scripts/update.mjs
