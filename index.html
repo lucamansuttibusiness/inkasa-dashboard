@@ -1136,29 +1136,52 @@ document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F
 
   /* ---------- interfaccia ---------- */
   const css = document.createElement('style');
-  css.textContent = '.jv-orb{position:fixed;left:14px;bottom:46px;z-index:50;width:42px;height:42px;border-radius:50%;border:1px solid rgba(108,124,255,.5);background:rgba(2,2,26,.8);color:#9aa0d6;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:.2s}'
-    + '.jv-orb svg{width:20px;height:20px}.jv-orb:hover{color:#f2f4ff;border-color:#eda93b}'
-    + '.jv-orb.on{color:#eda93b;border-color:#eda93b;box-shadow:0 0 14px rgba(237,169,59,.45)}'
-    + '.jv-orb.on.ascolta{animation:jvorb 1.8s ease-in-out infinite}.jv-orb.parla{background:rgba(237,169,59,.25);animation:jvorb .7s ease-in-out infinite}.jv-orb.pensa{animation:jvorb .4s ease-in-out infinite}'
-    + '@keyframes jvorb{50%{box-shadow:0 0 24px rgba(237,169,59,.9);transform:scale(1.08)}}'
-    + '.jv-voce{position:fixed;left:64px;bottom:48px;z-index:50;max-width:min(60vw,560px);padding:9px 14px;border-radius:10px;border:1px solid rgba(108,124,255,.35);background:rgba(2,2,26,.88);color:#f2f4ff;font:14px/1.35 Inter,Segoe UI,system-ui,sans-serif;opacity:0;pointer-events:none;transition:opacity .3s}'
-    + '.jv-voce.vis{opacity:1}.jv-voce.domanda{color:#9aa0d6}.jv-voce.risposta{border-color:#eda93b}.jv-voce.errore{color:#eda93b}';
+  css.textContent = '.jv-jarvis{flex:1 1 280px;min-width:0;max-width:min(42vw,640px);align-self:center;display:flex;align-items:center;gap:clamp(10px,1vw,18px);padding:clamp(8px,.7vw,14px) clamp(12px,1.1vw,20px);border:1px solid var(--jv-line,rgba(108,124,255,.24));background:linear-gradient(160deg,rgba(10,10,62,.74),rgba(3,3,26,.58));-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);position:relative}'
+    + '.jv-jarvis::before{content:"";position:absolute;left:-1px;top:-1px;width:12px;height:12px;border-left:2px solid var(--jv-cyan,#6c7cff);border-top:2px solid var(--jv-cyan,#6c7cff);filter:drop-shadow(0 0 5px var(--jv-cyan,#6c7cff))}'
+    + '.jv-jarvis::after{content:"";position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-right:2px solid var(--jv-cyan,#6c7cff);border-bottom:2px solid var(--jv-cyan,#6c7cff);filter:drop-shadow(0 0 5px var(--jv-cyan,#6c7cff))}'
+    + '.jv-orb{flex:none;width:clamp(40px,3.4vw,62px);height:clamp(40px,3.4vw,62px);border-radius:50%;border:1px solid rgba(108,124,255,.55);background:radial-gradient(circle at 50% 40%,rgba(108,124,255,.28),rgba(2,2,26,.85) 70%);color:#9aa0d6;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:.2s;box-shadow:0 0 12px rgba(108,124,255,.25)}'
+    + '.jv-orb svg{width:42%;height:42%}.jv-orb:hover{color:#f2f4ff;border-color:#eda93b}'
+    + '.jv-orb.on{color:#eda93b;border-color:#eda93b;box-shadow:0 0 16px rgba(237,169,59,.5)}'
+    + '.jv-orb.on.ascolta{animation:jvorb 1.8s ease-in-out infinite}.jv-orb.parla{background:radial-gradient(circle at 50% 40%,rgba(237,169,59,.5),rgba(2,2,26,.85) 70%);animation:jvorb .7s ease-in-out infinite}.jv-orb.pensa{animation:jvorb .4s ease-in-out infinite}'
+    + '@keyframes jvorb{50%{box-shadow:0 0 26px rgba(237,169,59,.9);transform:scale(1.07)}}'
+    + '.jv-jtext{min-width:0;font-family:var(--jv-mono,ui-monospace,Menlo,Consolas,monospace)}'
+    + '.jv-jlabel{margin:0;font:600 clamp(10px,.8vw,15px) var(--jv-mono,ui-monospace,Menlo,Consolas,monospace);letter-spacing:.34em;text-transform:uppercase;color:var(--jv-cyan,#6c7cff)}'
+    + '.jv-voce{margin:.3em 0 0;font-size:clamp(11px,.9vw,16px);line-height:1.35;letter-spacing:.03em;color:var(--jv-dim,#9aa0d6);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}'
+    + '.jv-voce.domanda{color:#9aa0d6}.jv-voce.risposta{color:#f2f4ff}.jv-voce.errore{color:#eda93b}.jv-voce.attivo{color:#eda93b}'
+    + '.jv-jarvis.flottante{position:fixed;left:14px;bottom:46px;z-index:50;max-width:min(60vw,560px)}';
   document.head.appendChild(css);
 
   const orb = document.createElement('button');
   orb.className = 'jv-orb'; orb.type = 'button'; orb.title = 'Jarvis (tasto J)';
   orb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
-  const bolla = document.createElement('div'); bolla.className = 'jv-voce';
-  document.body.appendChild(orb); document.body.appendChild(bolla);
+  const bolla = document.createElement('p'); bolla.className = 'jv-voce';
+  const modulo = document.createElement('div'); modulo.className = 'jv-jarvis';
+  const blocco = document.createElement('div'); blocco.className = 'jv-jtext';
+  const etichetta = document.createElement('p'); etichetta.className = 'jv-jlabel'; etichetta.textContent = 'Jarvis';
+  blocco.appendChild(etichetta); blocco.appendChild(bolla);
+  modulo.appendChild(orb); modulo.appendChild(blocco);
+  const testata = document.getElementById('testata');
+  const sys = testata && testata.querySelector('.jv-sys');
+  if (testata && sys) testata.insertBefore(modulo, sys);
+  else { modulo.classList.add('flottante'); document.body.appendChild(modulo); }
 
-  let tBolla = 0;
+  let tBolla = 0, messaggio = false;
+  function testoStato() {
+    if (!attivo) return 'In pausa · tocca la sfera o premi J';
+    if (pensa) return 'Sto pensando…';
+    if (parla) return 'Sto parlando…';
+    return SR ? 'In ascolto · dì «Jarvis» e la domanda' : 'Attivo · annuncio i nuovi ordini';
+  }
+  function mostraStato() { if (messaggio) return; bolla.textContent = testoStato(); bolla.className = 'jv-voce' + (attivo ? ' attivo' : ''); }
   function mostra(testo, tipo) {
-    bolla.textContent = testo; bolla.className = 'jv-voce vis ' + (tipo || '');
-    clearTimeout(tBolla); tBolla = setTimeout(() => { bolla.classList.remove('vis'); }, Math.min(14000, 3500 + testo.length * 60));
+    messaggio = true; bolla.textContent = testo; bolla.className = 'jv-voce ' + (tipo || '');
+    clearTimeout(tBolla); tBolla = setTimeout(() => { messaggio = false; mostraStato(); }, Math.min(14000, 3500 + testo.length * 60));
   }
   function aggiornaOrb() {
     orb.className = 'jv-orb' + (attivo ? ' on' : '') + (attivo && ascolta ? ' ascolta' : '') + (parla ? ' parla' : '') + (pensa ? ' pensa' : '');
+    mostraStato();
   }
+  aggiornaOrb();
 
   function accendi() {
     attivo = true; LS('inkasa_jarvis', '1'); aggiornaOrb();
@@ -1173,6 +1196,7 @@ document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F
     if (rec) { try { rec.stop(); } catch (e) {} }
     parla = false; aggiornaOrb(); mostra('Jarvis spento.', 'risposta');
   }
+  window.__jarvis = {gestisci, controllaOrdini, accendi};
   const commuta = () => (attivo ? spegni() : accendi());
   orb.addEventListener('click', commuta);
   orb.addEventListener('dblclick', (e) => e.stopPropagation()); // non attivare lo schermo intero
@@ -1181,7 +1205,7 @@ document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F
   // se in jarvis.json c'è l'indirizzo del server, le domande non previste vanno a Claude
   fetch('jarvis.json?t=' + Date.now(), {cache: 'no-store'}).then((r) => r.ok ? r.json() : {}).then((j) => { serverUrl = (j && j.url) || ''; }).catch(() => {});
   setInterval(() => { if (attivo) controllaOrdini(); }, 5000);
-  if (LS('inkasa_jarvis') === '1') mostra('Tocca il microfono per riattivare Jarvis.', 'errore');
+  if (LS('inkasa_jarvis') === '1') mostra('Tocca la sfera per riattivare Jarvis.', 'errore');
 })();
 </script>
 </body>
