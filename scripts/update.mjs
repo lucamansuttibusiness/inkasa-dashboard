@@ -4,7 +4,7 @@ import fs from 'node:fs';
 const {SHOPIFY_SHOP, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET, META_TOKEN, META_AD_ACCOUNT} = process.env;
 let SHOPIFY_TOKEN = process.env.SHOPIFY_TOKEN || ''; // facoltativo: se manca lo ottengo da client id + secret
 const SHOPIFY_API = process.env.SHOPIFY_API_VERSION || '2026-07';
-const META_API = process.env.META_API_VERSION || ''; // vuoto = versione predefinita di Meta
+const META_API = process.env.META_API_VERSION || 'v27.0';
 const FILE = new URL('../data.json', import.meta.url);
 
 const vecchio = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, 'utf8')) : {answers: {}};
@@ -23,7 +23,7 @@ async function tokenShopify() {
   return SHOPIFY_TOKEN;
 }
 
-async function shopifyql(query) {
+async function shopifyqlUna(query) {
   await tokenShopify();
   const r = await fetch(`https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API}/graphql.json`, {
     method: 'POST',
@@ -38,6 +38,17 @@ async function shopifyql(query) {
   // le righe arrivano come oggetti: le riporto a elenchi di testi, nell'ordine delle colonne
   const rows = res.tableData.rows.map((row) => columns.map((c, i) => String((Array.isArray(row) ? row[i] : row[c.name]) ?? '')));
   return {columns, rows};
+}
+
+// Shopify limita le query pesanti: se risponde "THROTTLED" aspetto e riprovo
+async function shopifyql(query) {
+  for (let t = 1; ; t++) {
+    try { return await shopifyqlUna(query); }
+    catch (e) {
+      if (!/THROTTLED|Rate limited/.test(e.message) || t >= 5) throw e;
+      await new Promise((r) => setTimeout(r, 20000));
+    }
+  }
 }
 
 async function meta() {
