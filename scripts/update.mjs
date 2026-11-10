@@ -1,13 +1,33 @@
-// Aggiorna data.json con i dati di Shopify e Meta Ads. Girato da GitHub Actions ogni 15 minuti.
+// Aggiorna data.enc.json (cifrato con la password DASH_PASSWORD) con i dati di Shopify e Meta Ads. Girato da GitHub Actions ogni 15 minuti.
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 
-const {SHOPIFY_SHOP, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET, META_TOKEN, META_AD_ACCOUNT} = process.env;
+const {DASH_PASSWORD, SHOPIFY_SHOP, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET, META_TOKEN, META_AD_ACCOUNT} = process.env;
 let SHOPIFY_TOKEN = process.env.SHOPIFY_TOKEN || ''; // facoltativo: se manca lo ottengo da client id + secret
 const SHOPIFY_API = process.env.SHOPIFY_API_VERSION || '2026-07';
 const META_API = process.env.META_API_VERSION || 'v27.0';
-const FILE = new URL('../data.json', import.meta.url);
+const FILE = new URL('../data.enc.json', import.meta.url);
+if (!DASH_PASSWORD) { console.error('Manca il segreto DASH_PASSWORD: non scrivo dati in chiaro.'); process.exit(1); }
 
-const vecchio = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, 'utf8')) : {answers: {}};
+const ITER = 250000;
+function cifra(obj) {
+  const salt = crypto.randomBytes(16), iv = crypto.randomBytes(12);
+  const key = crypto.pbkdf2Sync(DASH_PASSWORD, salt, ITER, 32, 'sha256');
+  const c = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const ct = Buffer.concat([c.update(JSON.stringify(obj), 'utf8'), c.final(), c.getAuthTag()]);
+  return {v: 1, i: ITER, s: salt.toString('base64'), n: iv.toString('base64'), c: ct.toString('base64')};
+}
+function decifra(enc) {
+  const key = crypto.pbkdf2Sync(DASH_PASSWORD, Buffer.from(enc.s, 'base64'), enc.i, 32, 'sha256');
+  const buf = Buffer.from(enc.c, 'base64');
+  const d = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(enc.n, 'base64'));
+  d.setAuthTag(buf.subarray(buf.length - 16));
+  return JSON.parse(Buffer.concat([d.update(buf.subarray(0, buf.length - 16)), d.final()]).toString('utf8'));
+}
+
+let vecchio = {answers: {}};
+if (fs.existsSync(FILE)) { try { vecchio = decifra(JSON.parse(fs.readFileSync(FILE, 'utf8'))); } catch (e) { console.log('dati precedenti non leggibili (password cambiata?): riparto da zero'); } }
+else if (fs.existsSync(new URL('../data.json', import.meta.url))) vecchio = JSON.parse(fs.readFileSync(new URL('../data.json', import.meta.url), 'utf8')); // prima migrazione
 const risposte = {...vecchio.answers};
 const errori = [];
 
@@ -81,6 +101,6 @@ for (const [id, fn] of Object.entries(compiti)) {
 
 // riscrivo il file solo se i dati sono cambiati, così non si riempie di aggiornamenti inutili
 const cambiato = JSON.stringify(risposte) !== JSON.stringify(vecchio.answers);
-if (cambiato) fs.writeFileSync(FILE, JSON.stringify({updated: new Date().toISOString(), answers: risposte}));
-console.log(cambiato ? 'data.json aggiornato' : 'nessun cambiamento');
+if (cambiato) fs.writeFileSync(FILE, JSON.stringify(cifra({updated: new Date().toISOString(), answers: risposte})));
+console.log(cambiato ? 'data.enc.json aggiornato' : 'nessun cambiamento');
 if (errori.length) { console.error('ERRORI:\n' + errori.join('\n')); process.exit(1); }
