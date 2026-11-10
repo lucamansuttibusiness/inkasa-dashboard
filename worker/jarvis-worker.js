@@ -17,7 +17,8 @@ const cors = {
   'Access-Control-Max-Age': '86400',
 };
 const json = (obj, status = 200) => new Response(JSON.stringify(obj), {status, headers: {...cors, 'Content-Type': 'application/json'}});
-const taglia = (x, n = 7000) => { const s = typeof x === 'string' ? x : JSON.stringify(x); return s.length > n ? s.slice(0, n) + ' ...[troncato]' : s; };
+const taglia = (x, n = 4000) => { const s = typeof x === 'string' ? x : JSON.stringify(x); return s.length > n ? s.slice(0, n) + ' ...[troncato]' : s; };
+const impronta = (t) => { let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return h; };
 function uguali(a, b) {
   const x = new TextEncoder().encode(a), y = new TextEncoder().encode(b);
   let d = x.length ^ y.length;
@@ -26,9 +27,10 @@ function uguali(a, b) {
 }
 
 const SISTEMA = `Sei Jarvis, l'assistente vocale della "Centrale di comando" del negozio Shopify InKasa Volley (palloni da pallavolo), del suo titolare Luca. Stai parlando con Luca a voce, in una conversazione continua.
-Parla in italiano come in una chiacchierata: frasi brevi e naturali, al massimo tre per turno, tono calmo, sicuro e un filo elegante. Niente elenchi, markdown o simboli. Scrivi le cifre come si leggono ("trentuno euro e novantanove").
+Parla in italiano come in una chiacchierata: frasi brevi e naturali, di solito una o due per turno (ogni parola viene pagata e letta ad alta voce), tono calmo, sicuro e un filo elegante. Niente elenchi, markdown o simboli. Scrivi le cifre come si leggono ("trentuno euro e novantanove").
 Tieni il filo della conversazione, non ripetere ciò che hai già detto e quando serve fai tu una domanda a Luca. Se saluta o ringrazia, rispondi in breve.
 Hai strumenti per leggere in diretta i dati del negozio Shopify e dell'account Meta Ads: usali quando la domanda riguarda numeri che non sono già nei dati della dashboard. Non inventare mai numeri: se uno strumento fallisce, prova a correggere la query una volta, poi dillo.
+Per informazioni dal mondo esterno (meteo, notizie, prezzi, sport, concorrenti, eventi) usa web_search: di solito basta una sola ricerca, e non citare gli indirizzi dei siti a voce.
 ShopifyQL, esempi validi: "FROM sales SHOW orders, total_sales TIMESERIES month SINCE -365d UNTIL today"; "FROM sales SHOW net_items_sold, total_sales GROUP BY product_title SINCE -30d UNTIL today ORDER BY total_sales DESC LIMIT 10"; "FROM sales SHOW orders GROUP BY hour_of_day SINCE -30d UNTIL today"; "FROM sessions SHOW sessions, conversion_rate TIMESERIES day SINCE -7d UNTIL today". Le date sono nel fuso del negozio.
 Meta: per le campagne usa meta_insights con level campaign o ad; le azioni di acquisto sono in actions e action_values con action_type "purchase" o "offsite_conversion.fb_pixel_purchase".
 Non leggere né riferire nomi, email, telefoni o indirizzi dei clienti: se servono dati sugli ordini, usa solo importi, date, prodotti e città.
@@ -50,7 +52,10 @@ const STRUMENTI = [
       breakdowns: {type: 'string', description: 'es. age,gender oppure publisher_platform'}}, required: ['level', 'fields']}},
   {name: 'meta_oggetti', description: "Elenca campagne, gruppi di inserzioni o inserzioni dell'account Meta con stato, budget e obiettivo.",
     input_schema: {type: 'object', properties: {tipo: {type: 'string', enum: ['campaigns', 'adsets', 'ads']}, fields: {type: 'string', description: 'es. name,status,effective_status,daily_budget,lifetime_budget,objective'}}, required: ['tipo']}},
+  {type: 'web_search_20250305', name: 'web_search', max_uses: 2, user_location: {type: 'approximate', city: 'Manzano', region: 'Friuli-Venezia Giulia', country: 'IT', timezone: 'Europe/Rome'}},
 ];
+const cacheRisposte = new Map(); // domande identiche entro 5 minuti: risposta già pronta, zero costi
+const cacheVoce = new Map();     // frasi brevi già lette: audio riusato, zero crediti
 
 async function tokenShopify(env, nuovo) {
   if (!nuovo && tokShop && Date.now() < tokShopFino) return tokShop;
@@ -78,7 +83,7 @@ async function eseguiShopifyql(env, q) {
   const res = j.data.shopifyqlQuery;
   if (res.parseErrors && res.parseErrors.length) return 'Errore di sintassi ShopifyQL: ' + taglia(res.parseErrors, 600);
   const col = res.tableData.columns.map((c) => c.name);
-  const righe = res.tableData.rows.slice(0, 120).map((row) => col.map((c, i) => (Array.isArray(row) ? row[i] : row[c])));
+  const righe = res.tableData.rows.slice(0, 60).map((row) => col.map((c, i) => (Array.isArray(row) ? row[i] : row[c])));
   return taglia({colonne: col, righe, totale_righe: res.tableData.rows.length});
 }
 async function meta(env, percorso, param) {
@@ -115,7 +120,9 @@ async function strumento(env, nome, inp) {
 async function claude(env, messages) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {method: 'POST',
     headers: {'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json'},
-    body: JSON.stringify({model: env.MODELLO || MODELLO, max_tokens: 1500, system: SISTEMA + '\nOggi è ' + new Date().toLocaleDateString('it-IT', {timeZone: 'Europe/Rome', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'}) + '.', tools: STRUMENTI, messages})});
+    body: JSON.stringify({model: env.MODELLO || MODELLO, max_tokens: 1024, tools: STRUMENTI, messages,
+      // istruzioni e strumenti sono sempre uguali: in cache costano un decimo; la data sta fuori dalla cache
+      system: [{type: 'text', text: SISTEMA, cache_control: {type: 'ephemeral'}}, {type: 'text', text: 'Oggi è ' + new Date().toLocaleDateString('it-IT', {timeZone: 'Europe/Rome', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'}) + '.'}]})});
   if (!r.ok) throw new Error('anthropic ' + r.status + ' ' + (await r.text()).slice(0, 200));
   return r.json();
 }
@@ -136,26 +143,36 @@ export default {
       const testo = String(b.testo || '').slice(0, 700);
       if (!testo) return json({errore: 'testo vuoto'}, 400);
       if (!env.ELEVENLABS_API_KEY) return json({errore: 'voce non configurata'}, 501);
+      const giaLetta = cacheVoce.get(testo);
+      if (giaLetta) return new Response(giaLetta, {headers: {...cors, 'Content-Type': 'audio/mpeg'}});
       const rv = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + (env.VOCE_ID || VOCE) + '?output_format=mp3_44100_64', {method: 'POST',
         headers: {'xi-api-key': env.ELEVENLABS_API_KEY, 'content-type': 'application/json', accept: 'audio/mpeg'},
-        body: JSON.stringify({text: testo, model_id: env.VOCE_MODELLO || 'eleven_multilingual_v2', voice_settings: {stability: 0.5, similarity_boost: 0.8, style: 0.15}})});
+        body: JSON.stringify({text: testo, model_id: env.VOCE_MODELLO || 'eleven_flash_v2_5', language_code: 'it', voice_settings: {stability: 0.5, similarity_boost: 0.8}})});
       if (!rv.ok) return json({errore: 'voce ' + rv.status, dettaglio: (await rv.text()).slice(0, 300)}, 502);
-      return new Response(rv.body, {headers: {...cors, 'Content-Type': 'audio/mpeg'}});
+      const audio = await rv.arrayBuffer();
+      if (testo.length <= 160) { cacheVoce.set(testo, audio); if (cacheVoce.size > 40) cacheVoce.delete(cacheVoce.keys().next().value); }
+      return new Response(audio, {headers: {...cors, 'Content-Type': 'audio/mpeg'}});
     }
 
     const domanda = String(b.domanda || '').slice(0, 500), contesto = String(b.contesto || '').slice(0, 6000);
     if (!domanda) return json({errore: 'domanda vuota'}, 400);
-    const storia = (Array.isArray(b.storia) ? b.storia : []).slice(-12).filter((m) => m && (m.role === 'user' || m.role === 'assistant') && m.content).map((m) => ({role: m.role, content: String(m.content).slice(0, 800)}));
+    const storia = (Array.isArray(b.storia) ? b.storia : []).slice(-8).filter((m) => m && (m.role === 'user' || m.role === 'assistant') && m.content).map((m) => ({role: m.role, content: String(m.content).slice(0, 800)}));
     while (storia.length && storia[0].role !== 'user') storia.shift();
     if (storia.length && storia[storia.length - 1].role === 'user') storia.pop();
+    const chiave = storia.length ? '' : domanda.toLowerCase().trim() + '|' + impronta(contesto);
+    const pronta = chiave && cacheRisposte.get(chiave);
+    if (pronta && Date.now() - pronta.t < 300000) return json({risposta: pronta.r, strumenti: [], cache: true});
     const messages = [...storia, {role: 'user', content: 'DATI DELLA DASHBOARD:\n' + contesto + '\n\nDOMANDA DI LUCA: ' + domanda}];
     const usati = [];
     try {
       for (let giro = 0; giro < 6; giro++) {
         const j = await claude(env, messages);
+        if (j.stop_reason === 'pause_turn') { messages.push({role: 'assistant', content: j.content}); usati.push('web_search'); continue; } // ricerca web lunga: si riprende da dove era
         const chiamate = (j.content || []).filter((c) => c.type === 'tool_use');
         if (j.stop_reason !== 'tool_use' || !chiamate.length) {
-          const testo = (j.content || []).filter((c) => c.type === 'text').map((c) => c.text).join(' ').trim();
+          if ((j.content || []).some((c) => c.type === 'server_tool_use')) usati.push('web_search');
+          const testo = (j.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('').replace(/\s+/g, ' ').trim();
+          if (testo && chiave && !usati.includes('web_search')) { cacheRisposte.set(chiave, {r: testo, t: Date.now()}); if (cacheRisposte.size > 50) cacheRisposte.delete(cacheRisposte.keys().next().value); }
           return json({risposta: testo || 'Non ho una risposta.', strumenti: usati});
         }
         messages.push({role: 'assistant', content: j.content});

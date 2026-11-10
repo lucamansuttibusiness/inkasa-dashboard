@@ -39,7 +39,7 @@ grid-template-areas:"head head head" "left center right" "foot foot foot"}
 .jv-col{display:flex;flex-direction:column;gap:clamp(10px,1vw,20px);min-height:0}
 .jv-col>.jv-card{flex:none}
 .jv-col--l{grid-area:left}.jv-col--r{grid-area:right}
-.jv-card,.jv-panel{position:relative;background:linear-gradient(160deg,rgba(10,10,62,.74),rgba(3,3,26,.58));border:1px solid var(--jv-line);padding:clamp(12px,1.1vw,22px) clamp(14px,1.3vw,26px);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);overflow:hidden}
+.jv-card,.jv-panel{position:relative;background:linear-gradient(160deg,rgba(10,10,62,.86),rgba(3,3,26,.78));border:1px solid var(--jv-line);padding:clamp(12px,1.1vw,22px) clamp(14px,1.3vw,26px);overflow:hidden}
 .jv-card::before,.jv-panel::before{content:"";position:absolute;left:-1px;top:-1px;width:14px;height:14px;border-left:2px solid var(--jv-cyan);border-top:2px solid var(--jv-cyan);filter:drop-shadow(0 0 5px var(--jv-cyan))}
 .jv-card::after,.jv-panel::after{content:"";position:absolute;right:-1px;bottom:-1px;width:14px;height:14px;border-right:2px solid var(--jv-cyan);border-bottom:2px solid var(--jv-cyan);filter:drop-shadow(0 0 5px var(--jv-cyan))}
 .jv-card--key{border-color:rgba(237,169,59,.5)}
@@ -642,7 +642,10 @@ dash.draw('mappa', {
       const {x, y, lz} = made.cam, s = made.fit * Math.exp(lz), inv = 1 / s;
       made.g.setAttribute('transform', 'translate(' + (made.w / 2) + ' ' + (made.h / 2) + ') scale(' + s + ') translate(' + (-x) + ' ' + (-y) + ')');
       made.pat.setAttribute('patternTransform', 'scale(' + inv + ')');
-      for (let i = 0; i < made.dots.length; i++) made.dots[i].el.setAttribute('r', (made.dots[i].base * inv).toFixed(3));
+      if (Math.abs(inv - (made.invPrec || 0)) > made.invPrec * 0.01 || made.dotsN !== made.dots.length) { // i punti si ridimensionano solo se lo zoom cambia davvero
+        made.invPrec = inv; made.dotsN = made.dots.length;
+        for (let i = 0; i < made.dots.length; i++) made.dots[i].el.setAttribute('r', (made.dots[i].base * inv).toFixed(3));
+      }
       if (made.attivo) made.ret.setAttribute('transform', 'translate(' + made.attivo.x + ' ' + made.attivo.y + ') scale(' + inv + ')');
       for (const t of made.etichette) t.g.setAttribute('transform', 'translate(' + t.x + ' ' + t.y + ') scale(' + inv + ')');
       made.co1.textContent = made.G ? fmtGradi(x, y, made.G) : '';
@@ -744,6 +747,8 @@ dash.draw('mappa', {
     const tick = (ora) => {
       if (!made.alive) return;
       made.raf = requestAnimationFrame(tick);
+      if (ora - (made.fotogramma || 0) < 33) return; // 30 fotogrammi al secondo bastano: metà del lavoro per il PC
+      made.fotogramma = ora;
       made.misura();
       const st = made.st;
       if (!st) {

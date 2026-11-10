@@ -10,6 +10,16 @@
   let attivo = false, parla = false, pensa = false, ascolta = false;
   let rec = null, finestraFino = 0, voce = null, serverUrl = '';
   let precedente = null;
+  const SITI = [ // [parole che lo richiamano, indirizzo, nome detto a voce]
+    [/ordini/, 'https://admin.shopify.com/store/inkasaballs/orders', 'gli ordini di Shopify'],
+    [/prodott/, 'https://admin.shopify.com/store/inkasaballs/products', 'i prodotti di Shopify'],
+    [/analisi|statistich|report/, 'https://admin.shopify.com/store/inkasaballs/analytics', 'le analisi di Shopify'],
+    [/shopify|negozio|admin/, 'https://admin.shopify.com/store/inkasaballs', 'Shopify'],
+    [/inserzion|campagn|ads|gestione/, 'https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=1797943081369913', 'Gestione inserzioni'],
+    [/meta|business|facebook/, 'https://business.facebook.com/latest/home', 'Meta Business Suite'],
+    [/instagram/, 'https://www.instagram.com/volleyinkasa/', 'Instagram'],
+    [/sito|inkasa/, 'https://inkasa.store', 'il sito'],
+  ];
   const storia = [];
 
   const eur = new Intl.NumberFormat('it-IT', {style: 'currency', currency: 'EUR'});
@@ -111,7 +121,7 @@
   }
   async function chiediAClaude(domanda) {
     const pw = dash.password ? dash.password() : '';
-    const r = await fetch(serverUrl, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Jarvis-Key': pw}, body: JSON.stringify({domanda, contesto: contesto(), storia: storia.slice(-8)})});
+    const r = await fetch(serverUrl, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Jarvis-Key': pw}, body: JSON.stringify({domanda, contesto: contesto(), storia: storia.slice(-6)})});
     if (r.status === 401) throw new Error('password');
     if (r.status === 429) throw new Error('limite');
     if (!r.ok) throw new Error('server ' + r.status);
@@ -127,6 +137,11 @@
     mostra('« ' + testo + ' »', 'domanda');
     if (/^(zitto|silenzio|basta|stop)\b/.test(t)) { zittisci(); parla = false; aggiornaOrb(); return; }
     if (/^(aggiorna|ricarica)( i dati)?$/.test(t)) { dash.refresh(); di('Aggiorno i dati.'); return; }
+    const ap = t.match(/^(?:apri|aprimi|mostrami|vai su|portami su)\s+(?:il |la |lo |le |i |gli |l')?(.+)$/);
+    if (ap) { // siti preimpostati: si aprono in una nuova scheda, senza costi
+      const sito = SITI.find(([re]) => re.test(ap[1]));
+      if (sito) { const w = window.open(sito[1], '_blank'); di(w ? 'Apro ' + sito[2] + '.' : 'Il browser ha bloccato la nuova scheda: consenti i popup per questo sito.'); return; }
+    }
     if (serverUrl) {
       pensa = true; aggiornaOrb();
       try { di(await chiediAClaude(testo)); }
@@ -195,7 +210,7 @@
 
   /* ---------- interfaccia ---------- */
   const css = document.createElement('style');
-  css.textContent = '.jv-jarvis{flex:1 1 280px;min-width:0;max-width:min(42vw,640px);align-self:center;display:flex;align-items:center;gap:clamp(10px,1vw,18px);padding:clamp(8px,.7vw,14px) clamp(12px,1.1vw,20px);border:1px solid var(--jv-line,rgba(108,124,255,.24));background:linear-gradient(160deg,rgba(10,10,62,.74),rgba(3,3,26,.58));-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);position:relative}'
+  css.textContent = '.jv-jarvis{flex:1 1 280px;min-width:0;max-width:min(42vw,640px);align-self:center;display:flex;align-items:center;gap:clamp(10px,1vw,18px);padding:clamp(8px,.7vw,14px) clamp(12px,1.1vw,20px);border:1px solid var(--jv-line,rgba(108,124,255,.24));background:linear-gradient(160deg,rgba(10,10,62,.74),rgba(3,3,26,.58));position:relative}'
     + '.jv-jarvis::before{content:"";position:absolute;left:-1px;top:-1px;width:12px;height:12px;border-left:2px solid var(--jv-cyan,#6c7cff);border-top:2px solid var(--jv-cyan,#6c7cff);filter:drop-shadow(0 0 5px var(--jv-cyan,#6c7cff))}'
     + '.jv-jarvis::after{content:"";position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-right:2px solid var(--jv-cyan,#6c7cff);border-bottom:2px solid var(--jv-cyan,#6c7cff);filter:drop-shadow(0 0 5px var(--jv-cyan,#6c7cff))}'
     + '.jv-orb{flex:none;width:clamp(40px,3.4vw,62px);height:clamp(40px,3.4vw,62px);border-radius:50%;border:1px solid rgba(108,124,255,.55);background:radial-gradient(circle at 50% 40%,rgba(108,124,255,.28),rgba(2,2,26,.85) 70%);color:#9aa0d6;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:.2s;box-shadow:0 0 12px rgba(108,124,255,.25)}'
