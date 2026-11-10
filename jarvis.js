@@ -36,23 +36,42 @@
   }
   if (TTS) { scegliVoce(); speechSynthesis.onvoiceschanged = scegliVoce; }
 
-  function di(testo, dopo) {
-    mostra(testo, 'risposta');
-    if (!attivo || !TTS) { if (dopo) dopo(); return; }
-    speechSynthesis.cancel();
+  let audio = null, vocePro = true;
+  function zittisci() { if (TTS) speechSynthesis.cancel(); if (audio) { try { audio.pause(); } catch (e) {} audio = null; } }
+  function fine(dopo) { parla = false; aggiornaOrb(); finestraFino = Date.now() + 20000; riavviaAscolto(); if (dopo) dopo(); }
+  function voceBrowser(testo, dopo) {
+    if (!TTS) { fine(dopo); return; }
     const u = new SpeechSynthesisUtterance(testo);
     u.lang = 'it-IT'; if (voce) u.voice = voce; u.rate = 1.03; u.pitch = 1;
+    u.onend = u.onerror = () => fine(dopo);
+    speechSynthesis.speak(u);
+  }
+  async function di(testo, dopo) {
+    mostra(testo, 'risposta');
+    if (!attivo) { if (dopo) dopo(); return; }
+    zittisci();
     parla = true; aggiornaOrb();
     if (rec && ascolta) { try { rec.stop(); } catch (e) {} }
-    u.onend = u.onerror = () => { parla = false; aggiornaOrb(); finestraFino = Date.now() + 20000; riavviaAscolto(); if (dopo) dopo(); };
-    speechSynthesis.speak(u);
+    if (serverUrl && vocePro) { // voce ElevenLabs tramite il server
+      try {
+        const r = await fetch(serverUrl.replace(/\/$/, '') + '/voce', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Jarvis-Key': dash.password ? dash.password() : ''}, body: JSON.stringify({testo})});
+        if (r.status === 501) vocePro = false;
+        if (!r.ok) throw new Error('voce ' + r.status);
+        const url = URL.createObjectURL(await r.blob());
+        const a = new Audio(url); audio = a;
+        a.onended = a.onerror = () => { URL.revokeObjectURL(url); if (audio === a) audio = null; fine(dopo); };
+        await a.play();
+        return;
+      } catch (e) { audio = null; }
+    }
+    voceBrowser(testo, dopo);
   }
 
   /* ---------- risposte locali ---------- */
   function risposteLocali(t) {
     const d = leggi();
     const nd = 'Non ho ancora i dati.';
-    if (/zitto|silenzio|basta|stop/.test(t)) { if (TTS) speechSynthesis.cancel(); return {tace: true}; }
+    if (/zitto|silenzio|basta|stop/.test(t)) { zittisci(); return {tace: true}; }
     if (/aggiorna|ricarica/.test(t)) { dash.refresh(); return {dire: 'Aggiorno i dati.'}; }
     if (/riepilogo|situazione|come stiamo|come va|novit/.test(t)) {
       if (!d.tot) return {dire: nd};
@@ -99,7 +118,7 @@
   async function gestisci(testo) {
     const t = testo.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9' ]/g, ' ').replace(/\s+/g, ' ').trim();
     mostra('« ' + testo + ' »', 'domanda');
-    if (/^(zitto|silenzio|basta|stop)\b/.test(t)) { if (TTS) speechSynthesis.cancel(); return; }
+    if (/^(zitto|silenzio|basta|stop)\b/.test(t)) { zittisci(); parla = false; aggiornaOrb(); return; }
     if (/^(aggiorna|ricarica)( i dati)?$/.test(t)) { dash.refresh(); di('Aggiorno i dati.'); return; }
     if (serverUrl) {
       pensa = true; aggiornaOrb();
@@ -213,14 +232,14 @@
 
   function accendi() {
     attivo = true; LS('inkasa_jarvis', '1'); aggiornaOrb();
-    if (TTS) { speechSynthesis.cancel(); }
+    zittisci();
     precedente = istantanea();
     if (SR) avviaAscolto();
     di(SR ? 'Jarvis attivo. Dica Jarvis, seguito dalla domanda.' : 'Jarvis attivo. Annuncerò i nuovi ordini.');
   }
   function spegni() {
     attivo = false; LS('inkasa_jarvis', '0');
-    if (TTS) speechSynthesis.cancel();
+    zittisci();
     if (rec) { try { rec.stop(); } catch (e) {} }
     parla = false; aggiornaOrb(); mostra('Jarvis spento.', 'risposta');
   }

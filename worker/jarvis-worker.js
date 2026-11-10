@@ -2,7 +2,8 @@
 // Segreti da impostare su Cloudflare: ANTHROPIC_API_KEY (chiave Anthropic) e JARVIS_KEY (la stessa password della dashboard).
 const ORIGINE = 'https://lucamansuttibusiness.github.io';
 const MODELLO = 'claude-haiku-5-5';
-const MAX_ORA = 40; // domande all'ora (per istanza del server, indicativo)
+const MAX_ORA = 80; // richieste all'ora (domande + voce, per istanza del server, indicativo)
+const VOCE = 'onwK4e9ZLuTAKqWW03F9'; // ElevenLabs "Daniel": voce maschile calma; cambiabile con la variabile VOCE_ID
 const volte = [];
 
 const cors = {
@@ -38,6 +39,19 @@ export default {
 
     let b;
     try { b = await req.json(); } catch (e) { return json({errore: 'richiesta'}, 400); }
+
+    if (new URL(req.url).pathname === '/voce') { // legge ad alta voce un testo con ElevenLabs
+      const testo = String(b.testo || '').slice(0, 700);
+      if (!testo) return json({errore: 'testo vuoto'}, 400);
+      if (!env.ELEVENLABS_API_KEY) return json({errore: 'voce non configurata'}, 501);
+      const rv = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + (env.VOCE_ID || VOCE) + '?output_format=mp3_44100_64', {
+        method: 'POST',
+        headers: {'xi-api-key': env.ELEVENLABS_API_KEY, 'content-type': 'application/json', accept: 'audio/mpeg'},
+        body: JSON.stringify({text: testo, model_id: 'eleven_flash_v2_5', language_code: 'it', voice_settings: {stability: 0.55, similarity_boost: 0.75}}),
+      });
+      if (!rv.ok) return json({errore: 'voce ' + rv.status, dettaglio: (await rv.text()).slice(0, 300)}, 502);
+      return new Response(rv.body, {headers: {...cors, 'Content-Type': 'audio/mpeg'}});
+    }
     const domanda = String(b.domanda || '').slice(0, 500), contesto = String(b.contesto || '').slice(0, 6000);
     if (!domanda) return json({errore: 'domanda vuota'}, 400);
     const storia = (Array.isArray(b.storia) ? b.storia : []).slice(-8).filter((m) => m && (m.role === 'user' || m.role === 'assistant') && m.content).map((m) => ({role: m.role, content: String(m.content).slice(0, 800)}));
