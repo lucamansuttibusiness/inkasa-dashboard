@@ -9,7 +9,7 @@ const META_API = process.env.META_API_VERSION || 'v27.0';
 const FILE = new URL('../data.enc.json', import.meta.url);
 if (!DASH_PASSWORD) { console.error('Manca il segreto DASH_PASSWORD: non scrivo dati in chiaro.'); process.exit(1); }
 
-const ITER = 250000;
+const ITER = 1000000; // più alto = ogni tentativo di forza bruta costa di più
 function cifra(obj) {
   const salt = crypto.randomBytes(16), iv = crypto.randomBytes(12);
   const key = crypto.pbkdf2Sync(DASH_PASSWORD, salt, ITER, 32, 'sha256');
@@ -25,8 +25,8 @@ function decifra(enc) {
   return JSON.parse(Buffer.concat([d.update(buf.subarray(0, buf.length - 16)), d.final()]).toString('utf8'));
 }
 
-let vecchio = {answers: {}};
-if (fs.existsSync(FILE)) { try { vecchio = decifra(JSON.parse(fs.readFileSync(FILE, 'utf8'))); } catch (e) { console.log('dati precedenti non leggibili (password cambiata?): riparto da zero'); } }
+let vecchio = {answers: {}}, iterVecchie = 0;
+if (fs.existsSync(FILE)) { try { const e = JSON.parse(fs.readFileSync(FILE, 'utf8')); iterVecchie = e.i; vecchio = decifra(e); } catch (e) { console.log('dati precedenti non leggibili (password cambiata?): riparto da zero'); } }
 else if (fs.existsSync(new URL('../data.json', import.meta.url))) vecchio = JSON.parse(fs.readFileSync(new URL('../data.json', import.meta.url), 'utf8')); // prima migrazione
 const risposte = {...vecchio.answers};
 const errori = [];
@@ -100,7 +100,7 @@ for (const [id, fn] of Object.entries(compiti)) {
 }
 
 // riscrivo il file solo se i dati sono cambiati, così non si riempie di aggiornamenti inutili
-const cambiato = JSON.stringify(risposte) !== JSON.stringify(vecchio.answers);
+const cambiato = JSON.stringify(risposte) !== JSON.stringify(vecchio.answers) || iterVecchie !== ITER;
 if (cambiato) fs.writeFileSync(FILE, JSON.stringify(cifra({updated: new Date().toISOString(), answers: risposte})));
 console.log(cambiato ? 'data.enc.json aggiornato' : 'nessun cambiamento');
 if (errori.length) { console.error('ERRORI:\n' + errori.join('\n')); process.exit(1); }

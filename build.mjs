@@ -55,7 +55,7 @@ window.dash = (() => {
     return JSON.parse(new TextDecoder().decode(buf));
   }
   let lock = null;
-  function chiediPassword(msg) {
+  function chiediPassword(msg, attesa) {
     return new Promise((resolve) => {
       if (!lock) {
         lock = document.createElement('div');
@@ -67,16 +67,25 @@ window.dash = (() => {
       lock.querySelector('.lk-msg').textContent = msg || '';
       const inp = lock.querySelector('input'), form = lock.querySelector('form');
       inp.value = ''; setTimeout(() => inp.focus(), 50);
-      form.onsubmit = (e) => { e.preventDefault(); if (inp.value) resolve(inp.value); };
+      const btn = lock.querySelector('button');
+      let sec = attesa || 0;
+      const aggiorna = () => {
+        const bloccato = sec > 0;
+        inp.disabled = bloccato; btn.disabled = bloccato; btn.style.opacity = bloccato ? '.5' : '1';
+        if (bloccato) { lock.querySelector('.lk-msg').textContent = 'Troppi tentativi: riprova tra ' + sec + ' s'; sec--; setTimeout(aggiorna, 1000); }
+        else { lock.querySelector('.lk-msg').textContent = msg || ''; inp.focus(); }
+      };
+      aggiorna();
+      form.onsubmit = (e) => { e.preventDefault(); if (inp.value && !inp.disabled) resolve(inp.value); };
     });
   }
   async function leggiDati() {
     const enc = await get('data.enc.json');
-    let msg = '';
+    let msg = '', falliti = 0;
     for (;;) {
       let pw = pwNow;
       if (!pw) { try { pw = localStorage.getItem('inkasa_pw') || ''; } catch (e) { pw = ''; } }
-      if (!pw) pw = await chiediPassword(msg);
+      if (!pw) pw = await chiediPassword(msg, falliti >= 3 ? Math.min(120, Math.pow(2, falliti - 1)) : 0);
       try {
         const j = await decifra(enc, pw);
         pwNow = pw;
@@ -84,7 +93,7 @@ window.dash = (() => {
         if (lock) lock.style.display = 'none';
         return j;
       } catch (e) {
-        pwNow = ''; msg = 'Password errata';
+        pwNow = ''; msg = 'Password errata'; falliti++;
         try { localStorage.removeItem('inkasa_pw'); } catch (e2) {}
       }
     }
