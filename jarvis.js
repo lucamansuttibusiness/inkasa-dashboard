@@ -10,6 +10,7 @@
   let attivo = false, parla = false, pensa = false, ascolta = false;
   let rec = null, finestraFino = 0, voce = null, serverUrl = '';
   let precedente = null;
+  const storia = [];
 
   const eur = new Intl.NumberFormat('it-IT', {style: 'currency', currency: 'EUR'});
   const intero = new Intl.NumberFormat('it-IT');
@@ -30,7 +31,8 @@
   function scegliVoce() {
     if (!TTS) return;
     const v = speechSynthesis.getVoices().filter((x) => /^it/i.test(x.lang));
-    voce = v.find((x) => /google|natural|elsa|isabella|premium/i.test(x.name)) || v[0] || null;
+    const punti = (x) => (/natural/i.test(x.name) ? 50 : 0) + (/online/i.test(x.name) ? 20 : 0) + (/google/i.test(x.name) ? 15 : 0) + (/premium|enhanced|neural/i.test(x.name) ? 25 : 0) + (/diego|giuseppe|benigno|luca|cosimo/i.test(x.name) ? 5 : 0) + (x.localService ? 0 : 3);
+    voce = v.sort((a, b) => punti(b) - punti(a))[0] || null;
   }
   if (TTS) { scegliVoce(); speechSynthesis.onvoiceschanged = scegliVoce; }
 
@@ -39,10 +41,10 @@
     if (!attivo || !TTS) { if (dopo) dopo(); return; }
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(testo);
-    u.lang = 'it-IT'; if (voce) u.voice = voce; u.rate = 1; u.pitch = 0.9;
+    u.lang = 'it-IT'; if (voce) u.voice = voce; u.rate = 1.03; u.pitch = 1;
     parla = true; aggiornaOrb();
     if (rec && ascolta) { try { rec.stop(); } catch (e) {} }
-    u.onend = u.onerror = () => { parla = false; aggiornaOrb(); finestraFino = Date.now() + 8000; riavviaAscolto(); if (dopo) dopo(); };
+    u.onend = u.onerror = () => { parla = false; aggiornaOrb(); finestraFino = Date.now() + 20000; riavviaAscolto(); if (dopo) dopo(); };
     speechSynthesis.speak(u);
   }
 
@@ -83,27 +85,36 @@
   }
   async function chiediAClaude(domanda) {
     const pw = dash.password ? dash.password() : '';
-    const r = await fetch(serverUrl, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Jarvis-Key': pw}, body: JSON.stringify({domanda, contesto: contesto()})});
+    const r = await fetch(serverUrl, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Jarvis-Key': pw}, body: JSON.stringify({domanda, contesto: contesto(), storia: storia.slice(-8)})});
     if (r.status === 401) throw new Error('password');
     if (r.status === 429) throw new Error('limite');
     if (!r.ok) throw new Error('server ' + r.status);
     const j = await r.json();
-    return String(j.risposta || '').slice(0, 600);
+    const risp = String(j.risposta || '').slice(0, 800);
+    storia.push({role: 'user', content: domanda}, {role: 'assistant', content: risp});
+    while (storia.length > 12) storia.shift();
+    return risp;
   }
 
   async function gestisci(testo) {
     const t = testo.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9' ]/g, ' ').replace(/\s+/g, ' ').trim();
     mostra('« ' + testo + ' »', 'domanda');
-    const loc = risposteLocali(t);
-    if (loc && loc.tace) { return; }
-    if (loc) { di(loc.dire); return; }
+    if (/^(zitto|silenzio|basta|stop)\b/.test(t)) { if (TTS) speechSynthesis.cancel(); return; }
+    if (/^(aggiorna|ricarica)( i dati)?$/.test(t)) { dash.refresh(); di('Aggiorno i dati.'); return; }
     if (serverUrl) {
       pensa = true; aggiornaOrb();
       try { di(await chiediAClaude(testo)); }
-      catch (e) { di(e.message === 'limite' ? 'Ho raggiunto il limite di domande per ora.' : e.message === 'password' ? 'Non sono autorizzato a rispondere.' : 'Non riesco a collegarmi al mio cervello.'); }
+      catch (e) {
+        const loc = risposteLocali(t);
+        if (loc && loc.dire) di(loc.dire);
+        else di(e.message === 'limite' ? 'Ho raggiunto il limite di domande per ora.' : e.message === 'password' ? 'Non sono autorizzato a rispondere.' : 'Non riesco a collegarmi a Claude in questo momento.');
+      }
       finally { pensa = false; aggiornaOrb(); }
       return;
     }
+    const loc = risposteLocali(t);
+    if (loc && loc.tace) return;
+    if (loc) { di(loc.dire); return; }
     di('Non ho capito. Chiedimi di ordini, fatturato, vendite, spesa Meta o utile.');
   }
 
@@ -187,7 +198,7 @@
     if (!attivo) return 'In pausa · tocca la sfera o premi J';
     if (pensa) return 'Sto pensando…';
     if (parla) return 'Sto parlando…';
-    return SR ? 'In ascolto · dì «Jarvis» e la domanda' : 'Attivo · annuncio i nuovi ordini';
+    return SR ? (Date.now() < finestraFino ? 'Ti ascolto · puoi continuare senza dire «Jarvis»' : 'In ascolto · dì «Jarvis» e la domanda') : 'Attivo · annuncio i nuovi ordini';
   }
   function mostraStato() { if (messaggio) return; bolla.textContent = testoStato(); bolla.className = 'jv-voce' + (attivo ? ' attivo' : ''); }
   function mostra(testo, tipo) {
@@ -213,7 +224,7 @@
     if (rec) { try { rec.stop(); } catch (e) {} }
     parla = false; aggiornaOrb(); mostra('Jarvis spento.', 'risposta');
   }
-  window.__jarvis = {gestisci, controllaOrdini, accendi};
+  window.__jarvis = {gestisci, controllaOrdini, accendi, voce: () => voce && voce.name};
   const commuta = () => (attivo ? spegni() : accendi());
   orb.addEventListener('click', commuta);
   orb.addEventListener('dblclick', (e) => e.stopPropagation()); // non attivare lo schermo intero
