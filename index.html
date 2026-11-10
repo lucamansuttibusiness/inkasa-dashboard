@@ -1019,9 +1019,15 @@ document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F
   }
   if (TTS) { scegliVoce(); speechSynthesis.onvoiceschanged = scegliVoce; }
 
-  let audio = null, vocePro = true;
+  let audio = null, vocePro = true, mutoFino = 0, ultimaFrase = '';
+  const parole = (x) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length > 2);
+  function eEco(testo) { // la frase sentita è in gran parte la risposta appena detta da Jarvis?
+    const a = parole(testo), b = new Set(parole(ultimaFrase));
+    if (!a.length || !b.size) return false;
+    return a.filter((w) => b.has(w)).length / a.length >= 0.5;
+  }
   function zittisci() { if (TTS) speechSynthesis.cancel(); if (audio) { try { audio.pause(); } catch (e) {} audio = null; } }
-  function fine(dopo) { parla = false; aggiornaOrb(); finestraFino = Date.now() + 60000; riavviaAscolto(); if (dopo) dopo(); }
+  function fine(dopo) { parla = false; mutoFino = Date.now() + 1000; aggiornaOrb(); finestraFino = Date.now() + 60000; riavviaAscolto(); if (dopo) dopo(); }
   function voceBrowser(testo, dopo) {
     if (!TTS) { fine(dopo); return; }
     const u = new SpeechSynthesisUtterance(testo);
@@ -1031,10 +1037,11 @@ document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F
   }
   async function di(testo, dopo) {
     mostra(testo, 'risposta');
+    ultimaFrase = testo;
     if (!attivo) { if (dopo) dopo(); return; }
     zittisci();
     parla = true; aggiornaOrb();
-    if (rec && ascolta) { try { rec.stop(); } catch (e) {} }
+    if (rec) { try { rec.abort(); } catch (e) {} }
     if (serverUrl && vocePro) { // voce ElevenLabs tramite il server
       try {
         const r = await fetch(serverUrl.replace(/\/$/, '') + '/voce', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Jarvis-Key': dash.password ? dash.password() : ''}, body: JSON.stringify({testo})});
@@ -1126,12 +1133,14 @@ document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F
     if (!SR || rec) return;
     rec = new SR(); rec.lang = 'it-IT'; rec.continuous = true; rec.interimResults = false;
     rec.onstart = () => { ascolta = true; aggiornaOrb(); };
-    rec.onend = () => { ascolta = false; aggiornaOrb(); rec = null; if (attivo && !parla) setTimeout(avviaAscolto, 400); };
+    rec.onend = () => { ascolta = false; aggiornaOrb(); rec = null; if (attivo && !parla) setTimeout(avviaAscolto, Math.max(400, mutoFino - Date.now())); };
     rec.onerror = (e) => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { mostra('Microfono non consentito: consenti l\'accesso al microfono per il sito.', 'errore'); LS('inkasa_jarvis_mic', 'no'); } };
     rec.onresult = (ev) => {
+      if (parla || Date.now() < mutoFino) return; // mentre Jarvis parla, e subito dopo, ignoro quello che sento
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
         if (!ev.results[i].isFinal) continue;
         const testo = ev.results[i][0].transcript.trim();
+        if (eEco(testo)) continue;
         const t = testo.toLowerCase();
         if (WAKE.test(t)) {
           const resto = t.split(WAKE).slice(2).join(' ').trim() || t.replace(WAKE, '').trim();
@@ -1144,7 +1153,7 @@ document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F
     };
     try { rec.start(); } catch (e) { rec = null; }
   }
-  function riavviaAscolto() { if (attivo && !rec && SR) setTimeout(avviaAscolto, 300); }
+  function riavviaAscolto() { if (attivo && !rec && SR) setTimeout(() => { if (!parla) avviaAscolto(); }, Math.max(300, mutoFino - Date.now())); }
 
   /* ---------- nuovi ordini ---------- */
   function istantanea() {
