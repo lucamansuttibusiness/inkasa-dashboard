@@ -1,0 +1,45 @@
+name: Aggiorna dati
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: aggiorna-dati
+  cancel-in-progress: false
+
+jobs:
+  aggiorna:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Scarica i dati da Shopify e Meta
+        id: dati
+        continue-on-error: true
+        env:
+          SHOPIFY_SHOP: ${{ secrets.SHOPIFY_SHOP }}
+          SHOPIFY_TOKEN: ${{ secrets.SHOPIFY_TOKEN }}
+          META_TOKEN: ${{ secrets.META_TOKEN }}
+          META_AD_ACCOUNT: ${{ secrets.META_AD_ACCOUNT }}
+        run: node scripts/update.mjs
+      - name: Pubblica i dati nuovi
+        run: |
+          if [ -n "$(git status --porcelain data.json)" ]; then
+            git config user.name "dashboard-bot"
+            git config user.email "dashboard-bot@users.noreply.github.com"
+            git add data.json
+            git commit -m "Aggiorna dati"
+            git push
+          fi
+      - name: Segnala l'errore
+        if: steps.dati.outcome == 'failure'
+        run: |
+          echo "L'aggiornamento di Shopify o Meta non è riuscito: guarda il passaggio precedente." >&2
+          exit 1

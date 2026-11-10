@@ -1,0 +1,931 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Inkasa Volley — Centrale di comando</title>
+<style>
+#dash-root{--dash-gutter:0}
+.jv{--jv-bg:#02021a;--jv-panel:rgba(8,8,44,.66);--jv-line:rgba(108,124,255,.24);--jv-fg:#f2f4ff;--jv-dim:#9aa0d6;--jv-cyan:#6c7cff;--jv-amber:#eda93b;--jv-good:#5fe3a1;--jv-bad:#ff7a7a;--jv-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+position:relative;isolation:isolate;overflow:hidden;background:var(--jv-bg);color:var(--jv-fg);font-family:var(--font-anthropic-sans);min-height:100vh;box-sizing:border-box;
+display:grid;gap:clamp(12px,1.2vw,24px);padding:clamp(14px,1.8vw,36px);
+grid-template-columns:1fr;grid-template-areas:"head" "center" "left" "right" "foot"}
+.jv *{box-sizing:border-box}
+@media (min-width:1100px){
+.jv{height:100vh;grid-template-columns:minmax(260px,23vw) minmax(0,1fr) minmax(260px,23vw);grid-template-rows:auto minmax(0,1fr) auto;
+grid-template-areas:"head head head" "left center right" "foot foot foot"}
+}
+
+/* sfondo vivo */
+.jv-bg{position:absolute;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+.jv-bg i{position:absolute;display:block}
+.jv-glowA{width:70vw;height:70vw;left:-20vw;top:-30vw;background:radial-gradient(closest-side,rgba(108,124,255,.16),transparent);animation:jv-drift 22s ease-in-out infinite alternate}
+.jv-glowB{width:60vw;height:60vw;right:-18vw;bottom:-28vw;background:radial-gradient(closest-side,rgba(237,169,59,.12),transparent);animation:jv-drift 28s ease-in-out infinite alternate-reverse}
+.jv-grid3{inset:-60px;background-image:linear-gradient(rgba(108,124,255,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(108,124,255,.07) 1px,transparent 1px);background-size:60px 60px;
+-webkit-mask-image:radial-gradient(ellipse at 50% 45%,#000 20%,transparent 75%);mask-image:radial-gradient(ellipse at 50% 45%,#000 20%,transparent 75%);animation:jv-grid 14s linear infinite}
+.jv::after{content:"";position:absolute;inset:0;z-index:5;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(255,255,255,.022) 0 1px,transparent 1px 3px);mix-blend-mode:screen}
+@keyframes jv-grid{to{background-position:60px 60px,60px 60px}}
+@keyframes jv-drift{to{transform:translate(6vw,4vw) scale(1.12)}}
+@keyframes jv-spin{to{transform:rotate(360deg)}}
+
+/* testata */
+.jv-head{grid-area:head;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.jv-kicker{margin:0;font:600 clamp(10px,.8vw,15px) var(--jv-mono);letter-spacing:.34em;text-transform:uppercase;color:var(--jv-cyan)}
+.jv-kicker::before{content:"";display:inline-block;width:.7em;height:.7em;margin-right:.9em;border-radius:50%;background:var(--jv-good);box-shadow:0 0 10px var(--jv-good);animation:jv-blink 1.6s ease-in-out infinite}
+.jv-title{margin:.15em 0 0;font-weight:300;font-size:clamp(30px,3.6vw,76px);line-height:1;letter-spacing:.14em;text-transform:uppercase;color:var(--jv-fg);text-shadow:0 0 28px rgba(108,124,255,.4)}
+.jv-sys{text-align:right;font-family:var(--jv-mono)}
+.jv-clock{margin:0;font-weight:300;font-size:clamp(22px,2.4vw,50px);letter-spacing:.08em;font-variant-numeric:tabular-nums;color:var(--jv-fg);text-shadow:0 0 18px rgba(108,124,255,.5)}
+.jv-stamp{margin:.3em 0 0;font-size:clamp(10px,.78vw,14px);letter-spacing:.06em;color:var(--jv-dim);font-variant-numeric:tabular-nums}
+.jv-warn{margin:.3em 0 0;font-size:clamp(12px,.95vw,17px);font-weight:600;color:var(--jv-bad);letter-spacing:.03em}
+.jv-warn:empty{display:none}
+@keyframes jv-blink{50%{opacity:.25}}
+
+/* colonne */
+.jv-col{display:flex;flex-direction:column;gap:clamp(10px,1vw,20px);min-height:0}
+.jv-col>.jv-card{flex:none}
+.jv-col--l{grid-area:left}.jv-col--r{grid-area:right}
+.jv-card,.jv-panel{position:relative;background:linear-gradient(160deg,rgba(10,10,62,.74),rgba(3,3,26,.58));border:1px solid var(--jv-line);padding:clamp(12px,1.1vw,22px) clamp(14px,1.3vw,26px);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);overflow:hidden}
+.jv-card::before,.jv-panel::before{content:"";position:absolute;left:-1px;top:-1px;width:14px;height:14px;border-left:2px solid var(--jv-cyan);border-top:2px solid var(--jv-cyan);filter:drop-shadow(0 0 5px var(--jv-cyan))}
+.jv-card::after,.jv-panel::after{content:"";position:absolute;right:-1px;bottom:-1px;width:14px;height:14px;border-right:2px solid var(--jv-cyan);border-bottom:2px solid var(--jv-cyan);filter:drop-shadow(0 0 5px var(--jv-cyan))}
+.jv-card--key{border-color:rgba(237,169,59,.5)}
+.jv-card--key::before,.jv-card--key::after{border-color:var(--jv-amber);filter:drop-shadow(0 0 5px var(--jv-amber))}
+.jv-scan{position:absolute;left:0;top:0;width:35%;height:1px;background:linear-gradient(90deg,transparent,var(--jv-cyan),transparent);animation:jv-sweep 7s linear infinite;pointer-events:none}
+.jv-card:nth-child(2) .jv-scan{animation-delay:-2.3s}.jv-card:nth-child(3) .jv-scan{animation-delay:-4.6s}
+@keyframes jv-sweep{from{transform:translateX(-100%)}to{transform:translateX(300%)}}
+.jv-label{margin:0;font:600 clamp(10px,.8vw,15px) var(--jv-mono);letter-spacing:.2em;text-transform:uppercase;color:var(--jv-dim)}
+.jv-win{margin:.2em 0 .5em;font:clamp(10px,.75vw,13px) var(--jv-mono);letter-spacing:.06em;color:var(--jv-dim);opacity:.7}
+.jv-num{margin:0;min-height:1.1em;font-weight:300;font-size:clamp(28px,3.1vw,68px);line-height:1.1;letter-spacing:.01em;font-variant-numeric:tabular-nums;color:var(--jv-fg);text-shadow:0 0 22px rgba(108,124,255,.45)}
+.jv-card--key .jv-num{text-shadow:0 0 22px rgba(237,169,59,.5)}
+.jv-sub{margin:.5em 0 0;font-size:clamp(11px,.85vw,16px);color:var(--jv-dim);font-variant-numeric:tabular-nums}
+.jv-sub b,.jv-sub span{color:var(--jv-fg)}
+.jv-h2{margin:0 0 .4em;font:600 clamp(10px,.8vw,15px) var(--jv-mono);letter-spacing:.2em;text-transform:uppercase;color:var(--jv-dim)}
+.jv-legend{display:flex;flex-wrap:wrap;gap:14px;margin:0 0 4px;font:clamp(10px,.75vw,13px) var(--jv-mono);color:var(--jv-dim)}
+.jv-key{display:inline-flex;align-items:center;gap:6px}
+.jv-swatch{width:9px;height:9px;background:var(--jv-amber)}
+.jv-swatch--line{height:2px;width:16px;background:var(--jv-cyan)}
+.jv-chart{position:relative;min-height:170px;color:var(--jv-dim);font-size:13px}
+.jv-chart svg{display:block;overflow:visible}
+.jv-chart .jv-axis text{fill:var(--jv-dim);font:10px var(--jv-mono)}
+.jv-chart .jv-axis path{stroke:none}
+.jv-chart .jv-axis line{stroke:rgba(150,156,220,.16)}
+.jv-tip{position:absolute;pointer-events:none;min-width:150px;background:#07072b;border:1px solid var(--jv-line);padding:8px 10px;font-size:12px;line-height:1.5;color:var(--jv-fg);box-shadow:0 8px 24px rgba(0,0,0,.5);font-variant-numeric:tabular-nums;z-index:9}
+.jv-tip strong{display:block;color:var(--jv-cyan);font-weight:600}
+.jv-rank{list-style:none;margin:0;padding:0;display:grid;gap:clamp(6px,.6vw,12px)}
+.jv-rank li{position:relative;display:flex;justify-content:space-between;gap:10px;padding:0 0 5px;font:clamp(11px,.9vw,17px) var(--jv-mono);letter-spacing:.06em;text-transform:uppercase}
+.jv-rank li i{position:absolute;left:0;bottom:0;height:2px;background:linear-gradient(90deg,var(--jv-cyan),transparent);box-shadow:0 0 8px var(--jv-cyan)}
+.jv-rank .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jv-rank .v{color:var(--jv-amber);font-variant-numeric:tabular-nums}
+.jv-notes{margin-top:.4em;font-size:clamp(11px,.8vw,14px);line-height:1.55;color:var(--jv-dim);text-align:left}
+.jv-notes[open]{position:absolute;right:0;top:100%;z-index:8;width:min(440px,92vw);padding:12px 16px;background:#07072b;border:1px solid var(--jv-line);box-shadow:0 12px 32px rgba(0,0,0,.6)}
+.jv-sys{position:relative}
+.jv-notes summary{cursor:pointer;text-align:right;font:clamp(10px,.75vw,13px) var(--jv-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--jv-dim)}
+.jv-notes p{margin:8px 0 0}
+.jv [data-dash-source-state=refreshing]{opacity:.55}
+
+/* mappa */
+.jv-center{grid-area:center;position:relative;min-height:min(78vw,560px);min-width:0}
+.jv-mapwrap{position:absolute;inset:0;overflow:hidden;border:1px solid var(--jv-line);background:radial-gradient(closest-side,rgba(6,6,50,.55),rgba(2,2,18,.2))}
+.jv-mapwrap::before,.jv-mapwrap::after{content:"";position:absolute;width:22px;height:22px;z-index:3;pointer-events:none;filter:drop-shadow(0 0 6px var(--jv-cyan))}
+.jv-mapwrap::before{left:-1px;top:-1px;border-left:2px solid var(--jv-cyan);border-top:2px solid var(--jv-cyan)}
+.jv-mapwrap::after{right:-1px;bottom:-1px;border-right:2px solid var(--jv-cyan);border-bottom:2px solid var(--jv-cyan)}
+.jv-radar{position:absolute;left:50%;top:50%;width:150%;aspect-ratio:1;margin:0;translate:-50% -50%;border-radius:50%;pointer-events:none;
+background:conic-gradient(from 0deg,transparent 0 318deg,rgba(108,124,255,.14) 352deg,rgba(108,124,255,.0) 360deg),repeating-radial-gradient(circle,transparent 0 9.6%,rgba(108,124,255,.1) 9.6% 9.8%);
+-webkit-mask-image:radial-gradient(closest-side,#000 40%,transparent 100%);mask-image:radial-gradient(closest-side,#000 40%,transparent 100%);animation:jv-spin 18s linear infinite}
+.jv-map{position:absolute;inset:0}
+.jv-map-svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.jv-gr{fill:none;stroke:rgba(108,124,255,.12);stroke-width:1;vector-effect:non-scaling-stroke}
+.jv-neigh{fill:rgba(108,124,255,.03);stroke:rgba(108,124,255,.16);stroke-width:1;vector-effect:non-scaling-stroke}
+.jv-land{fill:url(#jv-dots);stroke:var(--jv-cyan);stroke-width:1.4;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.jv-land-fill{fill:rgba(0,0,128,.5);stroke:none}
+.jv-land-glow{fill:none;stroke:rgba(108,124,255,.32);stroke-width:9;vector-effect:non-scaling-stroke;stroke-linejoin:round;opacity:.55}
+.jv-dot{fill:rgba(150,162,255,.9);animation:jv-twinkle 3.4s ease-in-out infinite}
+.jv-dot--on{fill:var(--jv-amber);animation:none}
+@keyframes jv-twinkle{50%{opacity:.35}}
+.jv-tag text{font:500 11px var(--jv-mono);letter-spacing:.1em;text-transform:uppercase;fill:#cfd4ff;paint-order:stroke;stroke:rgba(2,2,18,.85);stroke-width:3px}
+.jv-tag line{stroke:rgba(108,124,255,.65);stroke-width:1}
+.jv-tag{opacity:0;animation:jv-tagin .7s ease forwards}
+@keyframes jv-tagin{to{opacity:1}}
+.jv-trail{stroke:var(--jv-amber);stroke-width:1.5;stroke-dasharray:3 6;vector-effect:non-scaling-stroke;opacity:.9;transition:opacity .6s}
+.jv-trail--off{opacity:0}
+.jv-ret .r1{fill:none;stroke:var(--jv-amber);stroke-width:1.6}
+.jv-ret .r2{fill:none;stroke:var(--jv-cyan);stroke-width:1.4;stroke-dasharray:5 7}
+.jv-ret .r3{fill:none;stroke:var(--jv-amber);stroke-width:2;stroke-dasharray:22 40}
+.jv-ret .tk{stroke:var(--jv-amber);stroke-width:1.5}
+.jv-ret .core{fill:var(--jv-amber)}
+.jv-hud{position:absolute;pointer-events:none;font-family:var(--jv-mono)}
+.jv-hud--card{left:clamp(8px,.8vw,16px);top:clamp(8px,.8vw,16px);max-width:min(46%,420px);padding:clamp(8px,.8vw,16px) clamp(12px,1.1vw,22px);background:linear-gradient(135deg,rgba(3,3,24,.86),rgba(3,3,24,.2));border-left:2px solid var(--jv-amber)}
+.jv-hud .k{display:block;font-size:clamp(9px,.72vw,13px);letter-spacing:.3em;text-transform:uppercase;color:var(--jv-amber)}
+.jv-hud .n{display:block;margin:.15em 0 0;font:300 clamp(18px,2.1vw,46px)/1.05 var(--font-anthropic-sans);letter-spacing:.1em;text-transform:uppercase;color:var(--jv-fg);text-shadow:0 0 22px rgba(237,169,59,.5)}
+.jv-hud .p{display:block;margin-top:.35em;font-size:clamp(10px,.8vw,15px);letter-spacing:.14em;text-transform:uppercase;color:var(--jv-dim)}
+.jv-hud .s{display:flex;gap:clamp(12px,1.6vw,32px);margin-top:.7em;font-size:clamp(10px,.8vw,15px);letter-spacing:.12em;text-transform:uppercase;color:var(--jv-dim)}
+.jv-hud .s b{display:block;margin-top:.1em;font:300 clamp(18px,1.7vw,36px) var(--font-anthropic-sans);letter-spacing:.02em;color:var(--jv-fg);font-variant-numeric:tabular-nums}
+.jv-hud--card.go .n,.jv-hud--card.go .p,.jv-hud--card.go .s{animation:jv-reveal .9s cubic-bezier(.2,.8,.2,1) both}
+@keyframes jv-reveal{from{opacity:0;transform:translateX(-14px);clip-path:inset(0 100% 0 0)}to{opacity:1;transform:none;clip-path:inset(0 0 0 0)}}
+.jv-hud--coord{right:clamp(8px,.8vw,16px);top:clamp(8px,.8vw,16px);text-align:right;font-size:clamp(10px,.8vw,15px);letter-spacing:.14em;color:var(--jv-dim);line-height:1.7;font-variant-numeric:tabular-nums}
+.jv-hud--coord b{color:var(--jv-cyan);font-weight:500}
+.jv-hud--prog{left:clamp(8px,.8vw,16px);right:clamp(8px,.8vw,16px);bottom:clamp(8px,.8vw,16px);font-size:clamp(9px,.72vw,13px);letter-spacing:.22em;text-transform:uppercase;color:var(--jv-dim)}
+.jv-hud--prog .b{margin-top:6px;height:2px;background:rgba(108,124,255,.2)}
+.jv-hud--prog .b i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--jv-cyan),var(--jv-amber));box-shadow:0 0 10px var(--jv-cyan);transition:width .8s}
+.jv-cross{position:absolute;inset:0;pointer-events:none;background:linear-gradient(var(--jv-line),var(--jv-line)) 50% 0/1px 100% no-repeat,linear-gradient(var(--jv-line),var(--jv-line)) 0 50%/100% 1px no-repeat;opacity:.35;-webkit-mask-image:radial-gradient(circle,transparent 9%,#000 10%,#000 12%,transparent 30%);mask-image:radial-gradient(circle,transparent 9%,#000 10%,#000 12%,transparent 30%)}
+
+/* striscia in basso */
+.jv-foot{grid-area:foot;border-top:1px solid var(--jv-line);border-bottom:1px solid var(--jv-line);overflow:hidden;background:rgba(3,3,26,.55);-webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
+.jv-ticker{white-space:nowrap;padding:.7em 0;font:clamp(11px,.9vw,17px) var(--jv-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--jv-dim)}
+.jv-track{display:inline-block;animation:jv-marquee 120s linear infinite}
+.jv-track span{margin-right:2.2em}.jv-track em{font-style:normal;color:var(--jv-amber);margin-left:.6em}
+@keyframes jv-marquee{to{transform:translateX(-50%)}}
+
+@media (min-width:1100px){.jv-col--r>.jv-panel{flex:1 1 0;min-height:90px;display:flex;flex-direction:column}.jv-col--r .jv-rank{flex:1 1 0;min-height:0;overflow:hidden;align-content:start}.jv-col{overflow:hidden}.jv-col--l>.jv-panel{flex:1 1 0;min-height:120px;display:flex;flex-direction:column}.jv-col--l .jv-chart{flex:1 1 auto;min-height:0}.jv-num{font-size:clamp(26px,min(3.1vw,5.8vh),68px)}
+.jv-center{min-height:0}
+.jv{gap:clamp(8px,min(1.2vw,1.5vh),24px);padding:clamp(10px,min(1.8vw,2.2vh),36px)}
+.jv-col{gap:clamp(8px,min(1vw,1.2vh),20px)}
+.jv-title{font-size:clamp(24px,min(3.6vw,6.2vh),76px)}
+.jv-clock{font-size:clamp(18px,min(2.4vw,4.2vh),50px)}
+.jv-card,.jv-panel{padding:clamp(8px,min(1.1vw,1.4vh),22px) clamp(12px,1.3vw,26px)}
+.jv-ticker{padding:.5em 0}}
+@media (max-width:1099px){.jv-center{min-height:max(78vw,420px)}.jv-col{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}}
+@media (prefers-reduced-motion:reduce){.jv-grid3,.jv-glowA,.jv-glowB,.jv-radar,.jv-track,.jv-scan{animation:none}}
+</style>
+<style>html,body{margin:0;height:100%;background:#02021a}:root{--font-anthropic-sans:"Inter","Segoe UI",system-ui,-apple-system,Roboto,sans-serif}.dash-skeleton{opacity:.55}</style>
+</head>
+<body>
+
+
+<div class="jv" id="centrale">
+  <div class="jv-bg" aria-hidden="true"><i class="jv-glowA"></i><i class="jv-glowB"></i><i class="jv-grid3"></i></div>
+
+  <header class="jv-head" id="testata">
+    <div>
+      <p class="jv-kicker">Centrale di comando</p>
+      <h1 class="jv-title" id="titolo">Inkasa Volley</h1>
+    </div>
+    <div class="jv-sys">
+      <p class="jv-clock" data-draw="orologio">--:--:--</p>
+      <p class="jv-stamp" id="stato-aggiornamento">Si aggiorna da solo ogni <span data-draw="intervallo">—</span> minuti · ultimo controllo <span data-draw="aggiornamento">—</span></p>
+      <p class="jv-stamp" id="periodo">Periodo dei 7 giorni: dal <b data-draw="dal" data-source="sette_giorni" data-field="dal" data-row="0">—</b> al <b data-draw="al" data-source="sette_giorni" data-field="al" data-row="0">—</b></p>
+      <p class="jv-warn" id="avviso-dati" data-draw="avviso"></p>
+      <details class="jv-notes" id="note">
+      <summary>Come sono calcolati i numeri</summary>
+      <p>I 7 giorni sono quelli completi che Meta chiama "ultimi 7 giorni": la giornata di oggi è esclusa, sia per la spesa sia per le vendite, così i due numeri coprono lo stesso periodo.</p>
+      <p>L'utile è: vendite Shopify, meno <span data-draw="costo">—</span> per ordine di produzione e spedizione, meno la spesa Meta Ads. Non include il compenso dell'agenzia né le tasse.</p>
+      <p>La mappa usa la città di spedizione di ogni ordine. Se un comune non è nell'elenco interno, l'ordine viene messo sul capoluogo della sua provincia.</p>
+    </details>
+    </div>
+  </header>
+
+  <aside class="jv-col jv-col--l" id="indicatori">
+    <article class="jv-card" id="card-vendite"><i class="jv-scan"></i>
+      <p class="jv-label">Vendite Shopify</p>
+      <p class="jv-win">Ultimi 7 giorni completi</p>
+      <p class="jv-num dash-skeleton" data-fetchpriority="high" data-draw="vendite" data-source="sette_giorni" data-field="vendite" data-row="0">—</p>
+      <p class="jv-sub"><span data-draw="ordini" data-source="sette_giorni" data-field="ordini" data-row="0">—</span> ordini</p>
+    </article>
+    <article class="jv-card" id="card-spesa"><i class="jv-scan"></i>
+      <p class="jv-label">Spesa Meta Ads</p>
+      <p class="jv-win">Ultimi 7 giorni completi</p>
+      <p class="jv-num dash-skeleton" data-fetchpriority="high" data-draw="spesa" data-source="sette_giorni" data-field="spesa" data-row="0">—</p>
+      <p class="jv-sub"><span data-draw="spesa-ordine" data-source="sette_giorni" data-field="spesa_per_ordine" data-row="0">—</span> di ads per ordine</p>
+    </article>
+    <article class="jv-card jv-card--key" id="card-utile"><i class="jv-scan"></i>
+      <p class="jv-label">Utile</p>
+      <p class="jv-win">Ultimi 7 giorni completi</p>
+      <p class="jv-num dash-skeleton" data-draw="utile" data-source="sette_giorni" data-field="utile" data-row="0">—</p>
+      <p class="jv-sub">Dopo <span data-draw="costi" data-source="sette_giorni" data-field="costi" data-row="0">—</span> di prodotto, spedizione e ads</p>
+    </article>
+    <section class="jv-panel" id="andamento-giornaliero">
+      <h2 class="jv-h2" id="titolo-andamento">Giorno per giorno</h2>
+      <div class="jv-legend">
+        <span class="jv-key"><span class="jv-swatch"></span>Vendite</span>
+        <span class="jv-key"><span class="jv-swatch jv-swatch--line"></span>Spesa Meta</span>
+      </div>
+      <div class="jv-chart dash-skeleton" data-draw="andamento" data-source="giorni"></div>
+    </section>
+  </aside>
+
+  <main class="jv-center" id="mappa-ordini">
+    <div class="jv-mapwrap">
+      <div class="jv-radar" aria-hidden="true"></div>
+      <div class="jv-map" data-draw="mappa" data-source="luoghi geo"></div>
+      <div class="jv-cross" aria-hidden="true"></div>
+    </div>
+  </main>
+
+  <aside class="jv-col jv-col--r">
+    <article class="jv-card" id="card-ordini-totali"><i class="jv-scan"></i>
+      <p class="jv-label">Ordini totali</p>
+      <p class="jv-win">Dall'apertura del negozio</p>
+      <p class="jv-num dash-skeleton" data-draw="ordini-totali" data-source="shopify_totale" data-field="orders" data-row="0">—</p>
+      <p class="jv-sub">Tutti gli ordini registrati su Shopify</p>
+    </article>
+    <article class="jv-card" id="card-fatturato-totale"><i class="jv-scan"></i>
+      <p class="jv-label">Fatturato complessivo</p>
+      <p class="jv-win">Dall'apertura del negozio</p>
+      <p class="jv-num dash-skeleton" data-draw="fatturato-totale" data-source="shopify_totale" data-field="total_sales" data-row="0">—</p>
+      <p class="jv-sub">Vendite totali, al netto di sconti e resi</p>
+    </article>
+    <article class="jv-card" id="card-citta"><i class="jv-scan"></i>
+      <p class="jv-label">Città raggiunte</p>
+      <p class="jv-win">Da cui è arrivato almeno un ordine</p>
+      <p class="jv-num dash-skeleton" data-draw="n-citta" data-source="riepilogo_citta" data-field="citta" data-row="0">—</p>
+      <p class="jv-sub"><span data-draw="n-province" data-source="riepilogo_citta" data-field="province" data-row="0">—</span> province · <span data-draw="n-estero" data-source="riepilogo_citta" data-field="estero" data-row="0">—</span> ordini dall'estero</p>
+    </article>
+    <section class="jv-panel" id="classifica-citta">
+      <h2 class="jv-h2">Le città che ordinano di più</h2>
+      <ol class="jv-rank" data-draw="classifica" data-source="luoghi"></ol>
+    </section>
+  </aside>
+
+  <footer class="jv-foot"><div class="jv-ticker" data-draw="ticker" data-source="luoghi"></div></footer>
+</div>
+
+
+<script src="d3.min.js"></script>
+<script>
+/* Sostituto minimo della piattaforma di Claude: legge data.json e geo.json e fa girare gli stessi disegni. */
+window.dash = (() => {
+  const loaders = {}, calcs = {}, draws = {}, store = {}, calcOrder = [], mounted = [];
+  let raw = null, geo = null, loading = null, rendered = false;
+  const api = {
+    loader: (id, o) => { loaders[id] = o; },
+    calc: (id, o) => { calcs[id] = o; calcOrder.push(id); },
+    draw: (name, f) => { draws[name] = f; },
+    data: (id) => store[id] || {status: 'loading', data: []},
+    refresh: () => { clearTimeout(api._t); api._t = setTimeout(load, 50); },
+  };
+  const compute = () => {
+    for (const id in loaders) {
+      try {
+        const ans = id === 'geo' ? geo : (raw && raw.answers ? raw.answers[id] : undefined);
+        if (ans === undefined || ans === null) throw new Error('dato mancante');
+        store[id] = {status: 'ok', data: loaders[id].fn({answer: ans})};
+      } catch (e) { store[id] = {status: 'error', error: String(e.message || e), data: []}; }
+    }
+    for (const id of calcOrder) {
+      try {
+        const ins = calcs[id].inputs.map((i) => { const s = store[i]; if (!s || s.status !== 'ok') throw new Error('manca ' + i); return s.data; });
+        store[id] = {status: 'ok', data: calcs[id].fn(...ins)};
+      } catch (e) { store[id] = {status: 'error', error: String(e.message || e), data: []}; }
+    }
+  };
+  const render = () => {
+    for (const el of document.querySelectorAll('[data-draw]')) {
+      const f = draws[el.dataset.draw];
+      if (!f) continue;
+      try {
+        if (typeof f === 'function') f(el);
+        else if (!rendered) { el.__m = f.mount(el); }
+        else if (f.update) f.update(el, el.__m);
+      } catch (e) { console.error(el.dataset.draw, e); }
+    }
+    rendered = true;
+  };
+  const get = async (url) => { const r = await fetch(url + '?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) throw new Error(url + ' ' + r.status); return r.json(); };
+  async function load() {
+    if (loading) return loading;
+    loading = (async () => {
+      try { raw = await get('data.json'); } catch (e) { console.error(e); }
+      if (!geo) { try { geo = await get('geo.json'); } catch (e) { console.error(e); } }
+      compute(); render();
+    })().finally(() => { loading = null; });
+    return loading;
+  }
+  api.start = () => { render(); return load(); };
+  return api;
+})();
+</script>
+<script>
+window.COSTO_ORDINE = 10;
+const MAPW = 700, MAPH = 860; // dimensioni del disegno dell'Italia nell'allegato geografico
+
+/* ---------- lettura delle risposte ---------- */
+const tabellaShopify = (answer) => {
+  const items = Array.isArray(answer) ? answer : [answer];
+  for (let it of items) {
+    if (it && typeof it === 'object' && typeof it.text === 'string' && !it.rows) it = it.text;
+    if (typeof it === 'string') { try { it = JSON.parse(it); } catch (e) { continue; } }
+    if (it && it.error) throw new Error(typeof it.error === 'string' ? it.error : (it.error.message || 'Errore Shopify'));
+    if (it && Array.isArray(it.columns) && Array.isArray(it.rows)) return it;
+  }
+  throw new Error('Shopify non ha restituito una tabella');
+};
+
+dash.loader('shopify_giorni', {
+  description: 'Trasforma la tabella di Shopify (colonne e righe separate) in una riga per giorno con numeri veri.',
+  fn: ({answer}) => {
+    const table = tabellaShopify(answer);
+    const names = table.columns.map((c) => c.name);
+    const at = (row, name) => row[names.indexOf(name)];
+    return table.rows.map((row) => ({
+      day: String(at(row, 'day')).slice(0, 10),
+      orders: Number(at(row, 'orders')),
+      total_sales: Number(at(row, 'total_sales')),
+    }));
+  },
+});
+
+dash.loader('shopify_totale', {
+  description: 'Trasforma la tabella di Shopify in una sola riga con ordini e vendite totali.',
+  fn: ({answer}) => {
+    const table = tabellaShopify(answer);
+    const names = table.columns.map((c) => c.name);
+    return table.rows.map((row) => ({
+      orders: Number(row[names.indexOf('orders')]),
+      total_sales: Number(row[names.indexOf('total_sales')]),
+    }));
+  },
+});
+
+dash.loader('ordini_citta', {
+  description: 'Trasforma la tabella di Shopify in una riga per città di spedizione, con ordini e vendite.',
+  fn: ({answer}) => {
+    const table = tabellaShopify(answer);
+    const names = table.columns.map((c) => c.name);
+    const at = (row, name) => row[names.indexOf(name)];
+    return table.rows.map((row) => ({
+      city: String(at(row, 'shipping_city') || ''),
+      prov: String(at(row, 'shipping_region') || ''),
+      country: String(at(row, 'shipping_country') || ''),
+      orders: Number(at(row, 'orders')),
+      sales: Number(at(row, 'total_sales')),
+    }));
+  },
+});
+
+dash.loader('geo', {
+  description: "Legge l'allegato con il contorno dell'Italia, la griglia e le coordinate dei comuni.",
+  fn: ({answer}) => {
+    const items = Array.isArray(answer) ? answer : [answer];
+    for (let g of items) {
+      if (g && typeof g === 'object' && typeof g.text === 'string' && !g.outline) g = g.text;
+      if (typeof g === 'string') { try { g = JSON.parse(g); } catch (e) { continue; } }
+      if (g && g.outline && g.table && g.prov) return [g];
+    }
+    throw new Error('Allegato geografico non valido');
+  },
+});
+
+dash.loader('meta_giorni', {
+  description: 'Legge la risposta di Meta (un testo JSON dentro "ad_entities") e ne ricava una riga per giorno con la spesa.',
+  fn: ({answer}) => {
+    const items = Array.isArray(answer) ? answer : [answer];
+    let list = null;
+    for (let it of items) {
+      if (it && typeof it === 'object' && typeof it.text === 'string' && it.ad_entities === undefined) it = it.text;
+      if (typeof it === 'string') { try { it = JSON.parse(it); } catch (e) { continue; } }
+      if (it && it.error) throw new Error(typeof it.error === 'string' ? it.error : (it.error.message || 'Errore Meta'));
+      if (it && it.ad_entities !== undefined) {
+        list = typeof it.ad_entities === 'string' ? JSON.parse(it.ad_entities) : it.ad_entities;
+        break;
+      }
+    }
+    if (!Array.isArray(list)) throw new Error('Meta non ha restituito la spesa');
+    return list.map((r) => ({
+      day: String(r.date_start).slice(0, 10),
+      spend: Number(r.amount_spent && r.amount_spent.value != null ? r.amount_spent.value : 0),
+      currency: r.amount_spent && r.amount_spent.unit ? String(r.amount_spent.unit) : '',
+    }));
+  },
+});
+
+/* ---------- calcoli ---------- */
+dash.calc('giorni', {
+  title: 'Vendite, spesa e utile per giorno',
+  description: 'Affianca vendite Shopify e spesa Meta giorno per giorno, sui giorni coperti da Meta (oggi escluso).',
+  inputs: ['meta_giorni', 'shopify_giorni'],
+  fn: (spesaMeta, venditeShopify) => {
+    if (!spesaMeta.length) return [];
+    const days = spesaMeta.map((r) => r.day).sort();
+    const dal = days[0], al = days[days.length - 1];
+    const cents = (n) => Math.round(n * 100) / 100;
+    const out = [];
+    for (let t = Date.parse(dal + 'T00:00:00Z'); t <= Date.parse(al + 'T00:00:00Z'); t += 86400000) {
+      const day = new Date(t).toISOString().slice(0, 10);
+      const v = venditeShopify.find((r) => r.day === day);
+      const s = spesaMeta.find((r) => r.day === day);
+      const vendite = v ? v.total_sales : 0, ordini = v ? v.orders : 0, spesa = s ? s.spend : 0;
+      const costi = ordini * window.COSTO_ORDINE;
+      out.push({day, vendite: cents(vendite), ordini, spesa: cents(spesa), costi, utile: cents(vendite - costi - spesa)});
+    }
+    return out;
+  },
+});
+
+dash.calc('sette_giorni', {
+  title: 'Totali degli ultimi 7 giorni',
+  description: 'Somma dei giorni: vendite, ordini, spesa Meta, costi di prodotto e utile.',
+  inputs: ['giorni'],
+  fn: (giorni) => {
+    if (!giorni || !giorni.length) return [];
+    const cents = (n) => Math.round(n * 100) / 100;
+    const sum = (k) => giorni.reduce((a, r) => a + r[k], 0);
+    const ordini = sum('ordini'), spesa = cents(sum('spesa'));
+    return [{
+      dal: giorni[0].day,
+      al: giorni[giorni.length - 1].day,
+      vendite: cents(sum('vendite')),
+      ordini,
+      spesa,
+      spesa_per_ordine: ordini ? cents(spesa / ordini) : null,
+      costi: sum('costi'),
+      utile: cents(sum('utile')),
+    }];
+  },
+});
+
+/* Dalle città scritte dai clienti ai punti sulla mappa. */
+const norm = (s) => String(s || '').toLowerCase()
+  .normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/[’`´]/g, "'")
+  .replace(/\(.*?\)/g, ' ')
+  .replace(/,\s*[a-z]{2}\s*$/g, ' ')
+  .replace(/\*.*$/, ' ')
+  .replace(/[^a-z0-9' ]/g, ' ')
+  .replace(/\s+/g, ' ').trim()
+  .replace(/^reggio nell'emilia$/, 'reggio emilia').replace(/^reggio di calabria$/, 'reggio calabria');
+const provNorm = (p) => norm(p).replace(/^monza e della brianza$/, 'monza e brianza').replace(/^bolzano.*$/, 'bolzano').replace(/^(valle d aosta.*|aosta)$/, 'aosta');
+const ALIAS = new Map([['rome', 'roma'], ['milan', 'milano'], ['rm', 'roma'], ['italia', '']]);
+
+function localizza(city, prov, G) {
+  let n = norm(city);
+  if (ALIAS.has(n)) n = ALIAS.get(n);
+  const p = provNorm(prov);
+  let xy = G.table[n + '|' + p] || G.table[n.replace(/ [a-z]{2}$/, '') + '|' + p] || (n && G.table[n + '|*']);
+  if (xy) return {x: xy[0], y: xy[1], esatto: true, pk: p};
+  xy = G.prov[p];
+  if (xy) return {x: xy[0], y: xy[1], esatto: false, pk: p};
+  return null;
+}
+window.localizza = localizza;
+
+dash.calc('luoghi', {
+  title: 'Città degli ordini',
+  description: 'Unisce le varianti di scrittura della stessa città e le colloca sulla mappa; se il comune non è noto usa il capoluogo della provincia.',
+  inputs: ['ordini_citta', 'geo'],
+  fn: (righe, geo) => {
+    const G = geo && geo[0];
+    if (!G) return [];
+    // la piattaforma può restituire gli oggetti annidati come testo JSON: li riapro
+    const G2 = {
+      table: typeof G.table === 'string' ? JSON.parse(G.table) : G.table,
+      prov: typeof G.prov === 'string' ? JSON.parse(G.prov) : G.prov,
+    };
+    const by = new Map();
+    for (const r of righe) {
+      if (!r.city && !r.prov) continue;
+      if (r.country && r.country !== 'Italy') continue;
+      const pos = window.localizza(r.city, r.prov, G2);
+      if (!pos) continue;
+      const key = pos.x + ',' + pos.y;
+      let p = by.get(key);
+      if (!p) { p = {x: pos.x, y: pos.y, pk: pos.pk, prov: r.prov, esatto: false, ordini: 0, vendite: 0, nomi: new Map()}; by.set(key, p); }
+      p.ordini += r.orders;
+      p.vendite += r.sales;
+      if (pos.esatto) p.esatto = true;
+      const nome = String(r.city).replace(/\(.*?\)|,\s*[A-Za-z]{2}\s*$|\*.*$/g, '').trim() || r.prov;
+      p.nomi.set(nome, (p.nomi.get(nome) || 0) + r.orders);
+    }
+    return [...by.values()].map((p) => {
+      const nome = [...p.nomi.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      return {nome: nome.toLowerCase() === 'italia' ? p.prov : nome, prov: p.prov, pk: p.pk, x: p.x, y: p.y, esatto: p.esatto, ordini: p.ordini, vendite: Math.round(p.vendite * 100) / 100};
+    }).sort((a, b) => b.ordini - a.ordini || a.nome.localeCompare(b.nome));
+  },
+});
+
+dash.calc('riepilogo_citta', {
+  title: 'Città, province e ordini dall\'estero',
+  description: 'Conta le città raggiunte, le province e gli ordini spediti fuori dall\'Italia.',
+  inputs: ['luoghi', 'ordini_citta'],
+  fn: (luoghi, righe) => {
+    if (!righe.length) return [];
+    return [{
+      citta: luoghi.length,
+      province: new Set(luoghi.map((p) => p.pk)).size,
+      estero: righe.filter((r) => r.country && r.country !== 'Italy').reduce((a, r) => a + r.orders, 0),
+    }];
+  },
+});
+
+/* ---------- formati e celle ---------- */
+const eur = new Intl.NumberFormat('it-IT', {style: 'currency', currency: 'EUR'});
+const eur0 = new Intl.NumberFormat('it-IT', {style: 'currency', currency: 'EUR', maximumFractionDigits: 0});
+const intero = new Intl.NumberFormat('it-IT');
+const giornoBreve = new Intl.DateTimeFormat('it-IT', {day: 'numeric', month: 'short', timeZone: 'UTC'});
+const giornoSett = new Intl.DateTimeFormat('it-IT', {weekday: 'short', day: 'numeric', timeZone: 'UTC'});
+const giornoLungo = new Intl.DateTimeFormat('it-IT', {weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'});
+const data = (iso) => new Date(iso + 'T00:00:00Z');
+
+function cella(name, id, field, fmt, after) {
+  dash.draw(name, (el) => {
+    const s = dash.data(id);
+    el.classList.toggle('dash-skeleton', s.status === 'loading' && el.classList.contains('jv-num'));
+    const row = s.status === 'ok' && Array.isArray(s.data) ? s.data[0] : null;
+    const value = row ? row[field] : null;
+    el.textContent = value === null || value === undefined ? '—' : fmt(value);
+    if (after) after(el, value);
+  });
+}
+
+cella('dal', 'sette_giorni', 'dal', (v) => giornoBreve.format(data(v)));
+cella('al', 'sette_giorni', 'al', (v) => giornoBreve.format(data(v)));
+cella('vendite', 'sette_giorni', 'vendite', (v) => eur.format(v));
+cella('ordini', 'sette_giorni', 'ordini', (v) => intero.format(v));
+cella('spesa', 'sette_giorni', 'spesa', (v) => eur.format(v));
+cella('spesa-ordine', 'sette_giorni', 'spesa_per_ordine', (v) => eur.format(v));
+cella('costi', 'sette_giorni', 'costi', (v) => eur0.format(v));
+cella('utile', 'sette_giorni', 'utile', (v) => eur.format(v), (el, v) => {
+  el.style.color = v === null || v === undefined ? '' : (v >= 0 ? 'var(--jv-good)' : 'var(--jv-bad)');
+});
+cella('ordini-totali', 'shopify_totale', 'orders', (v) => intero.format(v));
+cella('fatturato-totale', 'shopify_totale', 'total_sales', (v) => eur.format(v));
+cella('n-citta', 'riepilogo_citta', 'citta', (v) => intero.format(v));
+cella('n-province', 'riepilogo_citta', 'province', (v) => intero.format(v));
+cella('n-estero', 'riepilogo_citta', 'estero', (v) => intero.format(v));
+
+dash.draw('costo', (el) => { el.textContent = eur0.format(window.COSTO_ORDINE); });
+
+/* ---------- orologio e aggiornamento automatico ---------- */
+const AGGIORNA_MIN = 15;
+const FONTI_LIVE = ['shopify_giorni', 'shopify_totale', 'ordini_citta', 'meta_giorni'];
+const ora = new Intl.DateTimeFormat('it-IT', {hour: '2-digit', minute: '2-digit'});
+const oraSec = new Intl.DateTimeFormat('it-IT', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+
+dash.draw('orologio', {
+  mount: (el) => {
+    const made = {el};
+    made.scrivi = () => { made.el.textContent = oraSec.format(new Date()); };
+    made.scrivi();
+    made.timer = setInterval(made.scrivi, 1000);
+    return made;
+  },
+  update: (el, made) => { made.el = el; made.scrivi(); },
+  unmount: (el, made) => { clearInterval(made.timer); },
+});
+
+dash.draw('intervallo', (el) => { el.textContent = String(AGGIORNA_MIN); });
+
+dash.draw('aggiornamento', {
+  mount: (el) => {
+    const made = {el, ultimo: new Date()};
+    made.scrivi = () => { made.el.textContent = ora.format(made.ultimo); };
+    made.scrivi();
+    made.timer = setInterval(() => {
+      FONTI_LIVE.forEach((id) => dash.refresh(id));
+      made.ultimo = new Date();
+      made.scrivi();
+    }, AGGIORNA_MIN * 60000);
+    return made;
+  },
+  update: (el, made) => { made.el = el; made.scrivi(); },
+  unmount: (el, made) => { clearInterval(made.timer); },
+});
+
+dash.draw('avviso', (el) => {
+  const guasti = FONTI_LIVE.filter((id) => ['error', 'connect', 'declined', 'missing'].includes(dash.data(id).status));
+  el.textContent = guasti.length ? 'Dati non aggiornati: controlla la connessione di Shopify e Meta.' : '';
+});
+
+/* ---------- classifica e striscia scorrevole ---------- */
+const luoghiPronti = () => {
+  const s = dash.data('luoghi');
+  return s.status === 'ok' && Array.isArray(s.data) ? s.data : [];
+};
+
+dash.draw('classifica', (el) => {
+  const top = luoghiPronti().slice(0, 7);
+  const max = top.length ? top[0].ordini : 1;
+  el.replaceChildren(...top.map((p) => {
+    const li = document.createElement('li');
+    const n = document.createElement('span'); n.className = 'n'; n.textContent = p.nome;
+    const v = document.createElement('span'); v.className = 'v'; v.textContent = intero.format(p.ordini);
+    const bar = document.createElement('i'); bar.style.width = Math.max(6, Math.round(p.ordini / max * 100)) + '%';
+    li.append(n, v, bar);
+    return li;
+  }));
+  // tiene solo le righe che entrano nel riquadro, senza tagliarne a metà
+  while (el.children.length > 3 && el.scrollHeight > el.clientHeight + 1) el.lastElementChild.remove();
+});
+
+dash.draw('ticker', (el) => {
+  const lista = luoghiPronti();
+  el.replaceChildren();
+  if (!lista.length) return;
+  const track = document.createElement('div');
+  track.className = 'jv-track';
+  for (let giro = 0; giro < 2; giro++) {
+    for (const p of lista) {
+      const sp = document.createElement('span');
+      sp.append(p.nome);
+      const em = document.createElement('em'); em.textContent = '×' + p.ordini;
+      sp.append(em);
+      track.append(sp);
+    }
+  }
+  track.style.animationDuration = Math.max(40, Math.round(lista.length * 2.4)) + 's';
+  el.append(track);
+});
+
+/* ---------- la mappa che vola da una città all'altra ---------- */
+const ZOOM_CITTA = Math.log(7.5);   // quanto ci si avvicina a una città
+const ZOOM_AREA = Math.log(5);   // se la città non è nell'elenco, ci si ferma più larghi
+const TEMPO_SOSTA = 2400;          // millisecondi fermi sulla città (la camera continua a derivare piano)
+const ease = (t) => (t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const lerp = (a, b, t) => a + (b - a) * t;
+const mescola = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const gradi = (x, y, G) => {
+  const lon = (x - G.tx) / G.k * 180 / Math.PI;
+  const lat = (2 * Math.atan(Math.exp((G.ty - y) / G.k)) - Math.PI / 2) * 180 / Math.PI;
+  return {lat, lon};
+};
+const fmtGradi = (x, y, G) => { const g = gradi(x, y, G); return Math.abs(g.lat).toFixed(2) + '°' + (g.lat >= 0 ? 'N' : 'S') + '  ' + Math.abs(g.lon).toFixed(2) + '°' + (g.lon >= 0 ? 'E' : 'O'); };
+
+dash.draw('mappa', {
+  mount: (el) => {
+    const NS = 'http://www.w3.org/2000/svg';
+    const mk = (tag, attrs, parent) => {
+      const n = document.createElementNS(NS, tag);
+      for (const k in attrs) n.setAttribute(k, attrs[k]);
+      if (parent) parent.appendChild(n);
+      return n;
+    };
+    const div = (cls, parent, tag) => { const n = document.createElement(tag || 'div'); n.className = cls; if (parent) parent.appendChild(n); return n; };
+
+    el.replaceChildren();
+    const made = {alive: true, places: [], dots: [], etichette: [], queue: [], w: 0, h: 0, fit: 1, vista: 0,
+      cam: {x: MAPW / 2, y: MAPH / 2, lz: 0}, st: null, attivo: null, ultima: performance.now()};
+
+    const svg = mk('svg', {class: 'jv-map-svg', role: 'img', 'aria-label': 'Mappa dell\'Italia: la vista si sposta di città in città tra quelle da cui sono arrivati ordini'}, el);
+    const defs = mk('defs', {}, svg);
+    made.pat = mk('pattern', {id: 'jv-dots', width: 6, height: 6, patternUnits: 'userSpaceOnUse'}, defs);
+    mk('rect', {width: 6, height: 6, fill: 'rgba(0,0,128,.5)'}, made.pat);
+    mk('circle', {cx: 3, cy: 3, r: 1, fill: 'rgba(130,144,255,.5)'}, made.pat);
+    made.g = mk('g', {}, svg);
+    made.geoG = mk('g', {}, made.g);
+    made.trail = mk('line', {class: 'jv-trail jv-trail--off', x1: 0, y1: 0, x2: 0, y2: 0}, made.g);
+    made.dotsG = mk('g', {}, made.g);
+    made.tags = mk('g', {}, made.g);
+    made.ret = mk('g', {class: 'jv-ret', opacity: 0}, made.g);
+    for (const [delay, dur] of [[0, 2.2], [1.1, 2.2]]) {
+      const c = mk('circle', {class: 'r1', r: 8}, made.ret);
+      mk('animate', {attributeName: 'r', from: 8, to: 62, dur: dur + 's', begin: delay + 's', repeatCount: 'indefinite'}, c);
+      mk('animate', {attributeName: 'opacity', from: .9, to: 0, dur: dur + 's', begin: delay + 's', repeatCount: 'indefinite'}, c);
+    }
+    const r2 = mk('circle', {class: 'r2', r: 34}, made.ret);
+    mk('animateTransform', {attributeName: 'transform', type: 'rotate', from: '0', to: '360', dur: '9s', repeatCount: 'indefinite'}, r2);
+    const r3 = mk('circle', {class: 'r3', r: 44}, made.ret);
+    mk('animateTransform', {attributeName: 'transform', type: 'rotate', from: '360', to: '0', dur: '6s', repeatCount: 'indefinite'}, r3);
+    for (const [x1, y1, x2, y2] of [[0, -58, 0, -48], [0, 58, 0, 48], [-58, 0, -48, 0], [58, 0, 48, 0]]) mk('line', {class: 'tk', x1, y1, x2, y2}, made.ret);
+    mk('circle', {class: 'core', r: 4.5}, made.ret);
+
+    // scritte sopra la mappa
+    const card = div('jv-hud jv-hud--card', el);
+    made.k = div('k', card, 'span'); made.n = div('n', card, 'span'); made.p = div('p', card, 'span');
+    const s = div('s', card);
+    const s1 = div('', s, 'span'); s1.append('Ordini'); made.o = document.createElement('b'); s1.append(made.o);
+    const s2 = div('', s, 'span'); s2.append('Incasso'); made.v = document.createElement('b'); s2.append(made.v);
+    made.card = card;
+    const co = div('jv-hud jv-hud--coord', el);
+    made.co1 = div('', co, 'div'); made.co2 = div('', co, 'div');
+    const pr = div('jv-hud jv-hud--prog', el);
+    made.pr1 = div('t', pr, 'div');
+    const bar = div('b', pr); made.bar = document.createElement('i'); bar.append(made.bar);
+
+    made.k.textContent = 'Scansione degli ordini';
+    made.n.textContent = 'Italia';
+    made.p.textContent = 'In attesa dei dati';
+    made.o.textContent = '—'; made.v.textContent = '—';
+
+    made.misura = () => {
+      const w = el.clientWidth || 600, h = el.clientHeight || 600;
+      if (w === made.w && h === made.h) return;
+      made.w = w; made.h = h;
+      svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+      made.fit = Math.min(w / MAPW, h / MAPH) * 0.96;
+    };
+
+    made.disegna = () => {
+      const {x, y, lz} = made.cam, s = made.fit * Math.exp(lz), inv = 1 / s;
+      made.g.setAttribute('transform', 'translate(' + (made.w / 2) + ' ' + (made.h / 2) + ') scale(' + s + ') translate(' + (-x) + ' ' + (-y) + ')');
+      made.pat.setAttribute('patternTransform', 'scale(' + inv + ')');
+      for (let i = 0; i < made.dots.length; i++) made.dots[i].el.setAttribute('r', (made.dots[i].base * inv).toFixed(3));
+      if (made.attivo) made.ret.setAttribute('transform', 'translate(' + made.attivo.x + ' ' + made.attivo.y + ') scale(' + inv + ')');
+      for (const t of made.etichette) t.g.setAttribute('transform', 'translate(' + t.x + ' ' + t.y + ') scale(' + inv + ')');
+      made.co1.textContent = made.G ? fmtGradi(x, y, made.G) : '';
+      made.co2.textContent = 'ZOOM ×' + Math.exp(lz).toFixed(1);
+    };
+
+    made.carica = () => {
+      const gs = dash.data('geo');
+      const G = gs.status === 'ok' && gs.data && gs.data[0] ? gs.data[0] : null;
+      if (G && G !== made.G) {
+        made.G = G;
+        made.geoG.replaceChildren();
+        mk('path', {d: G.grid, class: 'jv-gr'}, made.geoG);
+        mk('path', {d: G.neighbors, class: 'jv-neigh'}, made.geoG);
+        mk('path', {d: G.outline, class: 'jv-land-glow'}, made.geoG);
+        mk('path', {d: G.outline, class: 'jv-land'}, made.geoG);
+      }
+      const lista = luoghiPronti();
+      made.places = lista;
+      made.dotsG.replaceChildren();
+      made.dots = lista.map((p) => {
+        const c = mk('circle', {cx: p.x, cy: p.y, r: 1, class: 'jv-dot'}, made.dotsG);
+        c.style.animationDelay = (-Math.random() * 3.4).toFixed(2) + 's';
+        return {el: c, base: 1.6 + Math.min(3.4, Math.log2(p.ordini + 1) * .75), p};
+      });
+      made.queue = [];
+      made.attivoEl = null;
+      if (made.attivo) { const d = made.dots.find((q) => q.p.x === made.attivo.x && q.p.y === made.attivo.y); if (d) { made.attivoEl = d.el; d.el.classList.add('jv-dot--on'); } }
+      if (!lista.length) { made.n.textContent = 'Italia'; made.p.textContent = 'In attesa dei dati'; }
+    };
+
+    // all'arrivo: cartellini con i nomi delle città vicine
+    made.etichetta = (p) => {
+      const sc = made.fit * Math.exp(p.esatto ? ZOOM_CITTA : ZOOM_AREA);
+      const occupati = [{x0: -30, y0: -30, x1: 30, y1: 30}]; // il mirino al centro
+      const vicine = made.places.filter((q) => q !== p).map((q) => ({q, d: Math.hypot(q.x - p.x, q.y - p.y)}))
+        .filter((o) => o.d * sc < Math.min(made.w, made.h) * .48).sort((a, b) => a.d - b.d).slice(0, 12);
+      let n = 0;
+      for (const o of vicine) {
+        if (n >= 6) break;
+        const testo = o.q.nome + ' ×' + o.q.ordini;
+        const larg = testo.length * 8.6 + 10;
+        const px = (o.q.x - p.x) * sc, py = (o.q.y - p.y) * sc;
+        let scelta = null;
+        for (const [dx, dy] of [[1, -1], [-1, -1], [1, 1], [-1, 1]]) {
+          const x0 = px + (dx > 0 ? 17 : -17 - larg), y0 = py + (dy < 0 ? -22 : 4);
+          const box = {x0, y0, x1: x0 + larg, y1: y0 + 16};
+          const fuori = Math.abs(px) > made.w / 2 - 20 || Math.abs(py) > made.h / 2 - 20 || x0 < -made.w / 2 + 10 || box.x1 > made.w / 2 - 10;
+          if (!fuori && !occupati.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) { scelta = {dx, dy, box}; break; }
+        }
+        if (!scelta) continue;
+        occupati.push(scelta.box);
+        const g = mk('g', {class: 'jv-tag'}, made.tags);
+        g.style.animationDelay = (n * 0.14) + 's';
+        mk('line', {x1: 0, y1: 0, x2: 14 * scelta.dx, y2: 12 * scelta.dy}, g);
+        const t = mk('text', {x: 17 * scelta.dx, y: scelta.dy < 0 ? -12 : 15, 'text-anchor': scelta.dx > 0 ? 'start' : 'end'}, g);
+        t.textContent = testo;
+        made.etichette.push({g, x: o.q.x, y: o.q.y});
+        n++;
+      }
+    };
+
+    made.prossima = () => {
+      if (!made.places.length) return null;
+      if (!made.queue.length) {
+        made.queue = mescola(made.places.map((_, i) => i));
+        made.vista = 0;
+      }
+      made.vista++;
+      return made.places[made.queue.pop()];
+    };
+
+    made.parti = (ora, p) => {
+      const da = {x: made.cam.x, y: made.cam.y, lz: made.cam.lz};
+      const a = {x: p.x, y: p.y, lz: p.esatto ? ZOOM_CITTA : ZOOM_AREA};
+      const dist = Math.hypot(a.x - da.x, a.y - da.y);
+      made.st = {fase: 'volo', t0: ora, dur: 1900 + Math.min(1900, dist * 6), da, a, p, dip: .3 + 1.6 * Math.min(1, dist / 260)};
+      made.trail.setAttribute('x1', da.x); made.trail.setAttribute('y1', da.y);
+      made.trail.setAttribute('x2', da.x); made.trail.setAttribute('y2', da.y);
+      made.trail.classList.remove('jv-trail--off');
+      made.ret.setAttribute('opacity', 0);
+      made.tags.replaceChildren(); made.etichette = [];
+      if (made.attivoEl) made.attivoEl.classList.remove('jv-dot--on');
+      const d = made.dots.find((q) => q.p === p);
+      made.attivoEl = d ? d.el : null;
+      if (made.attivoEl) made.attivoEl.classList.add('jv-dot--on');
+      made.attivo = {x: p.x, y: p.y};
+      // scheda della destinazione
+      made.k.textContent = 'Destinazione ' + String(made.vista).padStart(3, '0') + ' / ' + String(made.places.length).padStart(3, '0');
+      made.n.textContent = p.nome;
+      made.p.textContent = (p.prov ? 'Provincia di ' + p.prov : 'Italia') + (p.esatto ? '' : ' · area provinciale');
+      made.o.textContent = intero.format(p.ordini);
+      made.v.textContent = eur.format(p.vendite);
+      made.card.classList.remove('go'); void made.card.offsetWidth; made.card.classList.add('go');
+      made.bar.style.width = Math.round(made.vista / Math.max(1, made.places.length) * 100) + '%';
+      made.pr1.textContent = 'Giro delle città · ' + made.vista + ' di ' + made.places.length;
+    };
+
+    const tick = (ora) => {
+      if (!made.alive) return;
+      made.raf = requestAnimationFrame(tick);
+      made.misura();
+      const st = made.st;
+      if (!st) {
+        // primo istante: panoramica dell'Italia, poi si parte
+        if (made.places.length && ora - made.ultima > 1600) made.parti(ora, made.prossima());
+        made.disegna();
+        return;
+      }
+      const u = (ora - st.t0) / st.dur;
+      if (st.fase === 'volo') {
+        const k = Math.min(1, u), e = ease(k);
+        made.cam.x = lerp(st.da.x, st.a.x, e);
+        made.cam.y = lerp(st.da.y, st.a.y, e);
+        made.cam.lz = lerp(st.da.lz, st.a.lz, e) - st.dip * Math.sin(Math.PI * k);
+        made.trail.setAttribute('x2', lerp(st.da.x, st.a.x, Math.min(1, e * 1.15)));
+        made.trail.setAttribute('y2', lerp(st.da.y, st.a.y, Math.min(1, e * 1.15)));
+        if (u >= 1) {
+          made.st = {fase: 'sosta', t0: ora, dur: TEMPO_SOSTA, a: st.a, p: st.p};
+          made.trail.classList.add('jv-trail--off');
+          made.ret.setAttribute('opacity', 1);
+          made.etichetta(st.p);
+        }
+      } else {
+        const k = Math.min(1, u);
+        made.cam.x = st.a.x; made.cam.y = st.a.y;
+        made.cam.lz = st.a.lz + .16 * k; // avvicinamento lentissimo: la camera non si ferma mai
+        if (u >= 1) { const p = made.prossima(); if (p) made.parti(ora, p); else made.st = null; }
+      }
+      made.disegna();
+    };
+
+    made.misura();
+    made.carica();
+    made.disegna();
+    made.raf = requestAnimationFrame(tick);
+    return made;
+  },
+  update: (el, made) => { made.carica(); if (!made.st) made.ultima = performance.now(); },
+  unmount: (el, made) => { made.alive = false; cancelAnimationFrame(made.raf); },
+});
+
+/* ---------- grafico dei giorni ---------- */
+dash.draw('andamento', (el) => {
+  const s = dash.data('giorni');
+  el.classList.toggle('dash-skeleton', s.status === 'loading');
+  el.replaceChildren();
+  if (s.status === 'error') { el.textContent = 'Dati non caricati'; return; }
+  const rows = s.status === 'ok' && Array.isArray(s.data) ? s.data : [];
+  if (!rows.length) { el.textContent = '—'; return; }
+
+  const W = Math.max(260, el.clientWidth || 260), H = Math.max(150, el.clientHeight || 190), bottom = 24, top = 10, right = 6;
+  const svg = d3.select(el).append('svg')
+    .attr('width', '100%').attr('viewBox', '0 0 ' + W + ' ' + H)
+    .attr('role', 'img').attr('aria-label', 'Vendite Shopify e spesa Meta Ads per ciascuno degli ultimi 7 giorni');
+
+  const max = d3.max(rows, (r) => Math.max(r.vendite, r.spesa)) || 1;
+  const y = d3.scaleLinear().domain([0, max]).nice(4).range([H - bottom, top]);
+  const gy = svg.append('g').attr('class', 'jv-axis');
+  gy.call(d3.axisLeft(y).ticks(4).tickSize(0).tickPadding(8).tickFormat((v) => eur0.format(v)));
+  let left = 0;
+  gy.selectAll('text').each(function () { left = Math.max(left, this.getComputedTextLength()); });
+  left = Math.ceil(left) + 12;
+  gy.attr('transform', 'translate(' + left + ',0)');
+  gy.selectAll('.tick').append('line').attr('x1', 0).attr('x2', W - left - right);
+
+  const x = d3.scaleBand().domain(rows.map((r) => r.day)).range([left, W - right]).padding(0.34);
+  const every = x.step() < 46 ? 2 : 1;
+  svg.append('g').attr('class', 'jv-axis').attr('transform', 'translate(0,' + (H - bottom) + ')')
+    .call(d3.axisBottom(x).tickSize(0).tickPadding(8)
+      .tickValues(rows.map((r) => r.day).filter((d, i) => i % every === 0))
+      .tickFormat((d) => giornoSett.format(data(d))));
+
+  svg.append('g').selectAll('rect').data(rows).join('rect')
+    .attr('x', (r) => x(r.day)).attr('width', x.bandwidth())
+    .attr('y', (r) => y(r.vendite)).attr('height', (r) => Math.max(0, y(0) - y(r.vendite)))
+    .style('fill', 'var(--jv-amber)').style('filter', 'drop-shadow(0 0 6px rgba(237,169,59,.5))');
+
+  const mid = (r) => x(r.day) + x.bandwidth() / 2;
+  svg.append('path').datum(rows)
+    .attr('d', d3.line().x(mid).y((r) => y(r.spesa)))
+    .style('fill', 'none').style('stroke', 'var(--jv-cyan)').style('stroke-width', 2).style('filter', 'drop-shadow(0 0 5px var(--jv-cyan))');
+  svg.append('g').selectAll('circle').data(rows).join('circle')
+    .attr('cx', mid).attr('cy', (r) => y(r.spesa)).attr('r', 3.5)
+    .style('fill', 'var(--jv-bg)').style('stroke', 'var(--jv-cyan)').style('stroke-width', 2);
+
+  const tip = document.createElement('div');
+  tip.className = 'jv-tip';
+  tip.hidden = true;
+  el.appendChild(tip);
+  const riga = (label, value) => { const d = document.createElement('div'); d.textContent = label + ': ' + value; return d; };
+  const show = (event, r) => {
+    const head = document.createElement('strong');
+    head.textContent = giornoLungo.format(data(r.day));
+    tip.replaceChildren(head, riga('Vendite', eur.format(r.vendite)), riga('Ordini', intero.format(r.ordini)),
+      riga('Spesa ads', eur.format(r.spesa)), riga('Utile', eur.format(r.utile)));
+    tip.hidden = false;
+    const box = el.getBoundingClientRect();
+    const scale = box.width / W;
+    const px = mid(r) * scale;
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = Math.max(0, Math.min(box.width - w, px - w / 2)) + 'px';
+    tip.style.top = Math.max(0, y(Math.max(r.vendite, r.spesa)) * scale - h - 10) + 'px';
+  };
+  svg.append('g').selectAll('rect').data(rows).join('rect')
+    .attr('x', (r) => x(r.day) - x.step() * x.paddingInner() / 2).attr('width', x.step())
+    .attr('y', top).attr('height', H - bottom - top)
+    .style('fill', 'transparent')
+    .on('pointerenter pointermove', show)
+    .on('pointerleave', () => { tip.hidden = true; });
+});
+</script>
+<script>
+dash.start();
+// doppio clic in qualsiasi punto: schermo intero (vale anche il tasto F)
+const schermoIntero = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); };
+document.addEventListener('dblclick', schermoIntero);
+document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) schermoIntero(); });
+</script>
+</body>
+</html>
