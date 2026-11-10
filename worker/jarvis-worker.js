@@ -17,7 +17,7 @@ const cors = {
   'Access-Control-Max-Age': '86400',
 };
 const json = (obj, status = 200) => new Response(JSON.stringify(obj), {status, headers: {...cors, 'Content-Type': 'application/json'}});
-const taglia = (x, n = 7000) => { const s = typeof x === 'string' ? x : JSON.stringify(x); return s.length > n ? s.slice(0, n) + ' …[troncato]' : s; };
+const taglia = (x, n = 7000) => { const s = typeof x === 'string' ? x : JSON.stringify(x); return s.length > n ? s.slice(0, n) + ' ...[troncato]' : s; };
 function uguali(a, b) {
   const x = new TextEncoder().encode(a), y = new TextEncoder().encode(b);
   let d = x.length ^ y.length;
@@ -138,7 +138,7 @@ export default {
       if (!env.ELEVENLABS_API_KEY) return json({errore: 'voce non configurata'}, 501);
       const rv = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + (env.VOCE_ID || VOCE) + '?output_format=mp3_44100_64', {method: 'POST',
         headers: {'xi-api-key': env.ELEVENLABS_API_KEY, 'content-type': 'application/json', accept: 'audio/mpeg'},
-        body: JSON.stringify({text: testo, model_id: 'eleven_flash_v2_5', language_code: 'it', voice_settings: {stability: 0.55, similarity_boost: 0.75}})});
+        body: JSON.stringify({text: testo, model_id: env.VOCE_MODELLO || 'eleven_multilingual_v2', voice_settings: {stability: 0.5, similarity_boost: 0.8, style: 0.15}})});
       if (!rv.ok) return json({errore: 'voce ' + rv.status, dettaglio: (await rv.text()).slice(0, 300)}, 502);
       return new Response(rv.body, {headers: {...cors, 'Content-Type': 'audio/mpeg'}});
     }
