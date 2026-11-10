@@ -3,7 +3,9 @@
 // Segreti su Cloudflare: ANTHROPIC_API_KEY, JARVIS_KEY (password della dashboard), ELEVENLABS_API_KEY,
 // SHOPIFY_CLIENT_SECRET, META_TOKEN. Variabili: SHOPIFY_SHOP, SHOPIFY_CLIENT_ID, META_AD_ACCOUNT, VOCE_ID, MODELLO.
 const ORIGINE = 'https://comando.inkasa.store';
-const MODELLO = 'claude-haiku-5-5';
+const MODELLO = 'claude-haiku-5-5';            // chiacchiera e domande semplici: veloce ed economico
+const MODELLO_ANALISI = 'claude-sonnet-5-5';   // analisi, stime e domande con dati in diretta: ragiona meglio
+const RE_ANALISI = /stim|previs|analizz|analisi|confront|rispetto a|andament|trend|crescit|calo|campagn|inserzion|ads|meta|roas|cpa|cpc|ctr|convers|prodott|vendut|vendit|fatturat|ordin|incass|utile|margin|budget|mese|mesi|settiman|anno|natale|black friday|strategi|perch|consigli|conviene|cerca|notizi|quant/i;
 const MAX_ORA = 80;
 const VOCE = 'onwK4e9ZLuTAKqWW03F9';
 const SHOPIFY_API = '2026-07';
@@ -135,10 +137,10 @@ async function strumento(env, nome, inp) {
   } catch (e) { return 'Errore: ' + String(e.message || e).slice(0, 300); }
 }
 
-async function claude(env, messages, contesto) {
+async function claude(env, messages, contesto, modello) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {method: 'POST',
     headers: {'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json'},
-    body: JSON.stringify({model: env.MODELLO || MODELLO, max_tokens: 1024, tools: STRUMENTI, messages,
+    body: JSON.stringify({model: modello, max_tokens: 1500, tools: STRUMENTI, messages,
       // istruzioni e strumenti sono sempre uguali: in cache costano un decimo; la data sta fuori dalla cache
       system: [{type: 'text', text: SISTEMA, cache_control: {type: 'ephemeral'}}, {type: 'text', text: 'Oggi è ' + new Date().toLocaleDateString('it-IT', {timeZone: 'Europe/Rome', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'}) + ', ore ' + new Date().toLocaleTimeString('it-IT', {timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit'}) + '.\nDati della dashboard, da usare solo se pertinenti:\n' + contesto}]})});
   if (!r.ok) throw new Error('anthropic ' + r.status + ' ' + (await r.text()).slice(0, 200));
@@ -191,15 +193,20 @@ export default {
     }
     const alt = (Array.isArray(b.alternative) ? b.alternative : []).map((x) => String(x).slice(0, 300)).filter(Boolean).slice(0, 2);
     const messages = [...storia, {role: 'user', content: domanda + (alt.length ? '\n(trascrizioni alternative del riconoscimento vocale: ' + alt.join(' | ') + ')' : '')}];
-    const usati = [], t0 = Date.now();
+    const usati = [], t0 = Date.now(), iniziali = messages.slice();
+    const analisi = env.MODELLO_ANALISI || MODELLO_ANALISI;
+    let modello = RE_ANALISI.test(domanda) ? analisi : (env.MODELLO || MODELLO);
     const salva = (v) => { // ogni scambio finisce in cronologia (90 giorni), senza rallentare la risposta
       if (!env.STORIA) return;
-      const rec = {t: t0, domanda, alternative: alt, ms: Date.now() - t0, strumenti: usati, ...v};
+      const rec = {t: t0, domanda, alternative: alt, ms: Date.now() - t0, strumenti: usati, modello, ...v};
       ctx.waitUntil(env.STORIA.put('c:' + String(9999999999999 - t0).padStart(13, '0'), JSON.stringify(rec), {expirationTtl: 90 * 86400}).catch(() => {}));
     };
     try {
       for (let giro = 0; giro < 6; giro++) {
-        const j = await claude(env, messages, contesto);
+        const j = await claude(env, messages, contesto, modello);
+        if (giro === 0 && modello !== analisi && j.stop_reason === 'tool_use') { // Haiku vuole i dati: la domanda passa a Sonnet da capo
+          modello = analisi; messages.length = 0; messages.push(...iniziali); continue;
+        }
         if (j.stop_reason === 'pause_turn') { messages.push({role: 'assistant', content: j.content}); usati.push('web_search'); continue; } // ricerca web lunga: si riprende da dove era
         const chiamate = (j.content || []).filter((c) => c.type === 'tool_use');
         if (j.stop_reason !== 'tool_use' || !chiamate.length) {
