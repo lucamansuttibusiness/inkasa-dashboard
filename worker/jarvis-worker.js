@@ -2,7 +2,7 @@
 // che può interrogare in diretta Shopify e Meta Ads (solo lettura) con gli strumenti qui sotto.
 // Segreti su Cloudflare: ANTHROPIC_API_KEY, JARVIS_KEY (password della dashboard), ELEVENLABS_API_KEY,
 // SHOPIFY_CLIENT_SECRET, META_TOKEN. Variabili: SHOPIFY_SHOP, SHOPIFY_CLIENT_ID, META_AD_ACCOUNT, VOCE_ID, MODELLO.
-const ORIGINE = 'https://lucamansuttibusiness.github.io';
+const ORIGINE = 'https://comando.inkasa.store';
 const MODELLO = 'claude-haiku-5-5';
 const MAX_ORA = 80;
 const VOCE = 'onwK4e9ZLuTAKqWW03F9';
