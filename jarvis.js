@@ -38,7 +38,7 @@
 
   let audio = null, vocePro = true;
   function zittisci() { if (TTS) speechSynthesis.cancel(); if (audio) { try { audio.pause(); } catch (e) {} audio = null; } }
-  function fine(dopo) { parla = false; aggiornaOrb(); finestraFino = Date.now() + 20000; riavviaAscolto(); if (dopo) dopo(); }
+  function fine(dopo) { parla = false; aggiornaOrb(); finestraFino = Date.now() + 60000; riavviaAscolto(); if (dopo) dopo(); }
   function voceBrowser(testo, dopo) {
     if (!TTS) { fine(dopo); return; }
     const u = new SpeechSynthesisUtterance(testo);
@@ -55,7 +55,7 @@
     if (serverUrl && vocePro) { // voce ElevenLabs tramite il server
       try {
         const r = await fetch(serverUrl.replace(/\/$/, '') + '/voce', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Jarvis-Key': dash.password ? dash.password() : ''}, body: JSON.stringify({testo})});
-        if (r.status === 501) vocePro = false;
+        if (!r.ok) vocePro = false;
         if (!r.ok) throw new Error('voce ' + r.status);
         const url = URL.createObjectURL(await r.blob());
         const a = new Audio(url); audio = a;
@@ -153,7 +153,10 @@
         if (WAKE.test(t)) {
           const resto = t.split(WAKE).slice(2).join(' ').trim() || t.replace(WAKE, '').trim();
           if (resto.length > 2) gestisci(resto); else { di('Dica pure.'); }
-        } else if (Date.now() < finestraFino && t.length > 2) gestisci(testo);
+        } else if (Date.now() < finestraFino && t.length > 2) {
+          if (/^(grazie|basta cosi|basta|a posto|ok grazie|chiudi|fine)( jarvis)?$/.test(t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z ]/g, '').trim())) { di('Quando vuoi, sono qui.', () => { finestraFino = 0; aggiornaOrb(); }); }
+          else gestisci(testo);
+        }
       }
     };
     try { rec.start(); } catch (e) { rec = null; }
@@ -217,7 +220,7 @@
     if (!attivo) return 'In pausa · tocca la sfera o premi J';
     if (pensa) return 'Sto pensando…';
     if (parla) return 'Sto parlando…';
-    return SR ? (Date.now() < finestraFino ? 'Ti ascolto · puoi continuare senza dire «Jarvis»' : 'In ascolto · dì «Jarvis» e la domanda') : 'Attivo · annuncio i nuovi ordini';
+    return SR ? (Date.now() < finestraFino ? 'In conversazione · parla pure, «grazie» per chiudere' : 'In ascolto · dì «Jarvis» e la domanda') : 'Attivo · annuncio i nuovi ordini';
   }
   function mostraStato() { if (messaggio) return; bolla.textContent = testoStato(); bolla.className = 'jv-voce' + (attivo ? ' attivo' : ''); }
   function mostra(testo, tipo) {
@@ -229,6 +232,7 @@
     mostraStato();
   }
   aggiornaOrb();
+  setInterval(mostraStato, 5000);
 
   function accendi() {
     attivo = true; LS('inkasa_jarvis', '1'); aggiornaOrb();
