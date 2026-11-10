@@ -31,7 +31,7 @@ Parli con Luca a voce, in una conversazione continua: rispondi come una persona 
 Puoi parlare di qualsiasi argomento: idee, consigli, curiosità, attualità, lavoro. I numeri del negozio citali solo quando la domanda riguarda davvero il negozio: non ripiegare mai sui dati del negozio per riempire una risposta.
 Il testo arriva dal riconoscimento vocale e può contenere parole capite male: se è ambiguo o senza senso, considera le trascrizioni alternative; se resta poco chiaro, chiedi a Luca di ripetere in poche parole invece di indovinare.
 Tieni il filo della conversazione, non ripetere ciò che hai già detto e quando serve fai tu una domanda. Se saluta o ringrazia, rispondi in breve.
-Strumenti: per numeri del negozio non presenti nei dati della dashboard usa shopifyql, shopify_graphql, meta_insights e meta_oggetti (solo lettura); per informazioni dal mondo (meteo, notizie, prezzi, sport, eventi) usa web_search, di solito una ricerca basta, e non leggere ad alta voce gli indirizzi dei siti. Non inventare mai numeri: se uno strumento fallisce, correggi la query una volta, poi dillo.
+Strumenti: per numeri del negozio non presenti nei dati della dashboard usa shopifyql, shopify_graphql, meta_insights e meta_oggetti (solo lettura); per il meteo usa sempre lo strumento meteo (previsioni aggiornate, mai web_search); per altre informazioni dal mondo (notizie, prezzi, sport, eventi) usa web_search mettendo nella query mese e anno correnti, di solito una ricerca basta, e non leggere ad alta voce gli indirizzi dei siti. Non inventare mai numeri: se uno strumento fallisce, correggi la query una volta, poi dillo.
 ShopifyQL, esempi validi: "FROM sales SHOW orders, total_sales TIMESERIES month SINCE -365d UNTIL today"; "FROM sales SHOW net_items_sold, total_sales GROUP BY product_title SINCE -30d UNTIL today ORDER BY total_sales DESC LIMIT 10"; "FROM sales SHOW orders GROUP BY hour_of_day SINCE -30d UNTIL today"; "FROM sessions SHOW sessions, conversion_rate TIMESERIES day SINCE -7d UNTIL today". Le date sono nel fuso del negozio.
 Meta: per le campagne usa meta_insights con level campaign o ad; gli acquisti sono in actions e action_values con action_type "purchase" o "offsite_conversion.fb_pixel_purchase".
 Non leggere né riferire nomi, email, telefoni o indirizzi dei clienti: degli ordini usa solo importi, date, prodotti e città.
@@ -53,8 +53,24 @@ const STRUMENTI = [
       breakdowns: {type: 'string', description: 'es. age,gender oppure publisher_platform'}}, required: ['level', 'fields']}},
   {name: 'meta_oggetti', description: "Elenca campagne, gruppi di inserzioni o inserzioni dell'account Meta con stato, budget e obiettivo.",
     input_schema: {type: 'object', properties: {tipo: {type: 'string', enum: ['campaigns', 'adsets', 'ads']}, fields: {type: 'string', description: 'es. name,status,effective_status,daily_budget,lifetime_budget,objective'}}, required: ['tipo']}},
+  {name: 'meteo', description: 'Meteo attuale e previsioni fino a 7 giorni per una località (Open-Meteo, dati aggiornati). Se Luca non dice dove, usa Manzano.',
+    input_schema: {type: 'object', properties: {luogo: {type: 'string', description: 'Città o paese, es. Manzano, Udine, Milano'}, giorni: {type: 'integer', description: 'Giorni di previsione da 1 a 7 (oggi compreso)'}}, required: ['luogo']}},
   {type: 'web_search_20250305', name: 'web_search', max_uses: 2, user_location: {type: 'approximate', city: 'Manzano', region: 'Friuli-Venezia Giulia', country: 'IT', timezone: 'Europe/Rome'}},
 ];
+const CIELO = {0: 'sereno', 1: 'poco nuvoloso', 2: 'parzialmente nuvoloso', 3: 'coperto', 45: 'nebbia', 48: 'nebbia con brina', 51: 'pioviggine leggera', 53: 'pioviggine', 55: 'pioviggine intensa', 61: 'pioggia debole', 63: 'pioggia', 65: 'pioggia forte', 66: 'pioggia gelata', 67: 'pioggia gelata forte', 71: 'neve debole', 73: 'neve', 75: 'neve forte', 77: 'granelli di neve', 80: 'rovesci deboli', 81: 'rovesci', 82: 'rovesci violenti', 85: 'rovesci di neve', 86: 'forti rovesci di neve', 95: 'temporale', 96: 'temporale con grandine', 99: 'temporale forte con grandine'};
+async function meteo(luogo, giorni) {
+  const g = await (await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=it&name=' + encodeURIComponent(luogo))).json();
+  const p = g.results && g.results[0];
+  if (!p) return 'Località non trovata: ' + luogo;
+  const u = 'https://api.open-meteo.com/v1/forecast?latitude=' + p.latitude + '&longitude=' + p.longitude + '&timezone=Europe%2FRome&forecast_days=' + Math.min(7, Math.max(1, giorni || 3))
+    + '&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,precipitation&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max';
+  const m = await (await fetch(u)).json();
+  if (!m.daily) return 'Meteo non disponibile.';
+  const c = m.current || {};
+  return JSON.stringify({luogo: p.name + (p.admin1 ? ' (' + p.admin1 + ')' : ''),
+    adesso: {temperatura: c.temperature_2m, percepita: c.apparent_temperature, cielo: CIELO[c.weather_code], vento_kmh: c.wind_speed_10m, pioggia_mm: c.precipitation},
+    giorni: m.daily.time.map((d, i) => ({data: d, cielo: CIELO[m.daily.weather_code[i]], min: m.daily.temperature_2m_min[i], max: m.daily.temperature_2m_max[i], prob_pioggia: m.daily.precipitation_probability_max[i], pioggia_mm: m.daily.precipitation_sum[i], vento_max_kmh: m.daily.wind_speed_10m_max[i]}))});
+}
 const cacheRisposte = new Map(); // domande identiche entro 5 minuti: risposta già pronta, zero costi
 const cacheVoce = new Map();     // frasi brevi già lette: audio riusato, zero crediti
 
@@ -114,6 +130,7 @@ async function strumento(env, nome, inp) {
       const tipo = ['campaigns', 'adsets', 'ads'].includes(inp.tipo) ? inp.tipo : 'campaigns';
       return await meta(env, 'act_' + env.META_AD_ACCOUNT + '/' + tipo, {fields: inp.fields || 'name,status,effective_status,daily_budget,lifetime_budget,objective', limit: '100'});
     }
+    if (nome === 'meteo') return await meteo(String(inp.luogo || 'Manzano'), Number(inp.giorni) || 3);
     return 'Strumento sconosciuto.';
   } catch (e) { return 'Errore: ' + String(e.message || e).slice(0, 300); }
 }
