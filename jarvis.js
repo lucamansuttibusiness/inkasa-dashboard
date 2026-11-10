@@ -248,7 +248,8 @@
     zittisci();
     precedente = istantanea();
     if (SR) avviaAscolto();
-    di(SR ? 'Jarvis attivo. Dica Jarvis, seguito dalla domanda.' : 'Jarvis attivo. Annuncerò i nuovi ordini.');
+    if (TTS) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } // sblocca l'audio senza parlare
+    mostra(SR ? 'Attivo · dì «Jarvis» e la domanda' : 'Attivo · annuncerò i nuovi ordini', 'attivo');
   }
   function spegni() {
     attivo = false; LS('inkasa_jarvis', '0');
