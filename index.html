@@ -344,6 +344,7 @@ window.dash = (() => {
     return loading;
   }
   api.start = () => { render(); return load(); };
+  api.password = () => pwNow;
   return api;
 })();
 </script>
@@ -979,6 +980,209 @@ dash.start();
 const schermoIntero = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); };
 document.addEventListener('dblclick', schermoIntero);
 document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) schermoIntero(); });
+</script>
+<script>/* Jarvis: voce della Centrale di comando.
+   - annuncia i nuovi ordini
+   - risponde a voce ("Jarvis, quanti ordini abbiamo?") con i dati già in pagina
+   - se in jarvis.json c'è l'indirizzo del server, le domande non previste vanno a Claude */
+(() => {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const TTS = 'speechSynthesis' in window;
+  const LS = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } };
+
+  let attivo = false, parla = false, pensa = false, ascolta = false;
+  let rec = null, finestraFino = 0, voce = null, serverUrl = '';
+  let precedente = null;
+
+  const eur = new Intl.NumberFormat('it-IT', {style: 'currency', currency: 'EUR'});
+  const intero = new Intl.NumberFormat('it-IT');
+
+  /* ---------- dati dalla pagina ---------- */
+  const riga = (id) => { const s = dash.data(id); return s && s.status === 'ok' && Array.isArray(s.data) ? s.data : []; };
+  const leggi = () => {
+    const sg = riga('sette_giorni')[0] || null, tot = riga('shopify_totale')[0] || null, ri = riga('riepilogo_citta')[0] || null;
+    return {sg, tot, ri, luoghi: riga('luoghi'), giorni: riga('giorni')};
+  };
+  const euro = (n) => eur.format(n).replace(/ /g, ' ');
+  const parlato = (n) => { // 30,99 € -> "30 euro e 99"
+    const c = Math.round(n * 100), e = Math.floor(c / 100), r = c % 100;
+    return intero.format(e) + ' euro' + (r ? ' e ' + r : '');
+  };
+
+  /* ---------- voce ---------- */
+  function scegliVoce() {
+    if (!TTS) return;
+    const v = speechSynthesis.getVoices().filter((x) => /^it/i.test(x.lang));
+    voce = v.find((x) => /google|natural|elsa|isabella|premium/i.test(x.name)) || v[0] || null;
+  }
+  if (TTS) { scegliVoce(); speechSynthesis.onvoiceschanged = scegliVoce; }
+
+  function di(testo, dopo) {
+    mostra(testo, 'risposta');
+    if (!attivo || !TTS) { if (dopo) dopo(); return; }
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(testo);
+    u.lang = 'it-IT'; if (voce) u.voice = voce; u.rate = 1; u.pitch = 0.9;
+    parla = true; aggiornaOrb();
+    if (rec && ascolta) { try { rec.stop(); } catch (e) {} }
+    u.onend = u.onerror = () => { parla = false; aggiornaOrb(); finestraFino = Date.now() + 8000; riavviaAscolto(); if (dopo) dopo(); };
+    speechSynthesis.speak(u);
+  }
+
+  /* ---------- risposte locali ---------- */
+  function risposteLocali(t) {
+    const d = leggi();
+    const nd = 'Non ho ancora i dati.';
+    if (/zitto|silenzio|basta|stop/.test(t)) { if (TTS) speechSynthesis.cancel(); return {tace: true}; }
+    if (/aggiorna|ricarica/.test(t)) { dash.refresh(); return {dire: 'Aggiorno i dati.'}; }
+    if (/riepilogo|situazione|come stiamo|come va|novit/.test(t)) {
+      if (!d.tot) return {dire: nd};
+      let s = 'Siamo a ' + intero.format(d.tot.orders) + ' ordini e ' + parlato(d.tot.total_sales) + ' di fatturato complessivo.';
+      if (d.sg) s += ' Negli ultimi sette giorni ' + intero.format(d.sg.ordini) + ' ordini, ' + parlato(d.sg.vendite) + ' di vendite, ' + parlato(d.sg.spesa) + ' di spesa Meta, utile ' + parlato(d.sg.utile) + '.';
+      return {dire: s};
+    }
+    if (/utile|guadagn|profitt|margine/.test(t)) return d.sg ? {dire: 'L\'utile degli ultimi sette giorni è ' + parlato(d.sg.utile) + '.'} : {dire: nd};
+    if (/spesa|meta|pubblicit|ads|inserzion/.test(t)) return d.sg ? {dire: 'Negli ultimi sette giorni abbiamo speso ' + parlato(d.sg.spesa) + ' in Meta Ads' + (d.sg.spesa_per_ordine ? ', circa ' + parlato(d.sg.spesa_per_ordine) + ' per ordine' : '') + '.'} : {dire: nd};
+    if (/citt|dove|classifica|provinc/.test(t)) {
+      if (!d.luoghi.length) return {dire: nd};
+      const top = d.luoghi.slice(0, 3).map((p) => p.nome + ' con ' + p.ordini).join(', ');
+      return {dire: 'Le città che ordinano di più sono ' + top + '.' + (d.ri ? ' In tutto abbiamo raggiunto ' + d.ri.citta + ' città.' : '')};
+    }
+    if (/fatturat|incass|total/.test(t) && !/settiman|giorni/.test(t)) return d.tot ? {dire: 'Il fatturato complessivo è ' + parlato(d.tot.total_sales) + ', su ' + intero.format(d.tot.orders) + ' ordini.'} : {dire: nd};
+    if (/vendit|settiman|giorni/.test(t)) return d.sg ? {dire: 'Negli ultimi sette giorni ' + parlato(d.sg.vendite) + ' di vendite su ' + intero.format(d.sg.ordini) + ' ordini.'} : {dire: nd};
+    if (/ordin/.test(t)) return d.tot ? {dire: 'Abbiamo ricevuto ' + intero.format(d.tot.orders) + ' ordini in tutto.'} : {dire: nd};
+    return null;
+  }
+
+  /* ---------- Claude (se il server è configurato) ---------- */
+  function contesto() {
+    const d = leggi(), r = [];
+    if (d.tot) r.push('Ordini totali dall\'apertura: ' + d.tot.orders + '. Fatturato complessivo: ' + d.tot.total_sales + ' EUR.');
+    if (d.sg) r.push('Ultimi 7 giorni completi (' + d.sg.dal + ' / ' + d.sg.al + '): vendite ' + d.sg.vendite + ' EUR, ordini ' + d.sg.ordini + ', spesa Meta Ads ' + d.sg.spesa + ' EUR, costi prodotto e spedizione ' + d.sg.costi + ' EUR, utile ' + d.sg.utile + ' EUR.');
+    if (d.giorni.length) r.push('Giorno per giorno: ' + d.giorni.map((g) => g.day + ' vendite ' + g.vendite + ' ordini ' + g.ordini + ' spesa ' + g.spesa).join('; ') + '.');
+    if (d.ri) r.push('Città raggiunte: ' + d.ri.citta + ', province: ' + d.ri.province + ', ordini dall\'estero: ' + d.ri.estero + '.');
+    if (d.luoghi.length) r.push('Città con più ordini: ' + d.luoghi.slice(0, 15).map((p) => p.nome + ' ' + p.ordini).join(', ') + '.');
+    return r.join('\n').slice(0, 6000);
+  }
+  async function chiediAClaude(domanda) {
+    const pw = dash.password ? dash.password() : '';
+    const r = await fetch(serverUrl, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Jarvis-Key': pw}, body: JSON.stringify({domanda, contesto: contesto()})});
+    if (r.status === 401) throw new Error('password');
+    if (r.status === 429) throw new Error('limite');
+    if (!r.ok) throw new Error('server ' + r.status);
+    const j = await r.json();
+    return String(j.risposta || '').slice(0, 600);
+  }
+
+  async function gestisci(testo) {
+    const t = testo.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9' ]/g, ' ').replace(/\s+/g, ' ').trim();
+    mostra('« ' + testo + ' »', 'domanda');
+    const loc = risposteLocali(t);
+    if (loc && loc.tace) { return; }
+    if (loc) { di(loc.dire); return; }
+    if (serverUrl) {
+      pensa = true; aggiornaOrb();
+      try { di(await chiediAClaude(testo)); }
+      catch (e) { di(e.message === 'limite' ? 'Ho raggiunto il limite di domande per ora.' : e.message === 'password' ? 'Non sono autorizzato a rispondere.' : 'Non riesco a collegarmi al mio cervello.'); }
+      finally { pensa = false; aggiornaOrb(); }
+      return;
+    }
+    di('Non ho capito. Chiedimi di ordini, fatturato, vendite, spesa Meta o utile.');
+  }
+
+  /* ---------- ascolto ---------- */
+  const WAKE = /\b(jarvis|giarvis|gervis|jarvi|garvis|giarvi)\b/;
+  function avviaAscolto() {
+    if (!SR || rec) return;
+    rec = new SR(); rec.lang = 'it-IT'; rec.continuous = true; rec.interimResults = false;
+    rec.onstart = () => { ascolta = true; aggiornaOrb(); };
+    rec.onend = () => { ascolta = false; aggiornaOrb(); rec = null; if (attivo && !parla) setTimeout(avviaAscolto, 400); };
+    rec.onerror = (e) => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { mostra('Microfono non consentito: consenti l\'accesso al microfono per il sito.', 'errore'); LS('inkasa_jarvis_mic', 'no'); } };
+    rec.onresult = (ev) => {
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        if (!ev.results[i].isFinal) continue;
+        const testo = ev.results[i][0].transcript.trim();
+        const t = testo.toLowerCase();
+        if (WAKE.test(t)) {
+          const resto = t.split(WAKE).slice(2).join(' ').trim() || t.replace(WAKE, '').trim();
+          if (resto.length > 2) gestisci(resto); else { di('Dica pure.'); }
+        } else if (Date.now() < finestraFino && t.length > 2) gestisci(testo);
+      }
+    };
+    try { rec.start(); } catch (e) { rec = null; }
+  }
+  function riavviaAscolto() { if (attivo && !rec && SR) setTimeout(avviaAscolto, 300); }
+
+  /* ---------- nuovi ordini ---------- */
+  function istantanea() {
+    const d = leggi();
+    if (!d.tot) return null;
+    const citta = new Map(d.luoghi.map((p) => [p.nome, p.ordini]));
+    return {ordini: d.tot.orders, vendite: d.tot.total_sales, citta};
+  }
+  function controllaOrdini() {
+    const s = istantanea();
+    if (!s) return;
+    if (precedente && s.ordini > precedente.ordini) {
+      const n = s.ordini - precedente.ordini, incasso = s.vendite - precedente.vendite;
+      const nuove = [...s.citta.entries()].filter(([nome, o]) => o > (precedente.citta.get(nome) || 0)).map(([nome]) => nome);
+      let frase;
+      if (n === 1) frase = 'Nuovo ordine' + (nuove.length === 1 ? ' da ' + nuove[0] : '') + (incasso > 0 ? ', ' + parlato(incasso) : '') + '. Siamo a ' + intero.format(s.ordini) + ' ordini.';
+      else frase = 'Sono arrivati ' + n + ' nuovi ordini' + (incasso > 0 ? ', per ' + parlato(incasso) : '') + '. Siamo a ' + intero.format(s.ordini) + ' ordini.';
+      di(frase);
+    }
+    precedente = s;
+  }
+
+  /* ---------- interfaccia ---------- */
+  const css = document.createElement('style');
+  css.textContent = '.jv-orb{position:fixed;left:14px;bottom:46px;z-index:50;width:42px;height:42px;border-radius:50%;border:1px solid rgba(108,124,255,.5);background:rgba(2,2,26,.8);color:#9aa0d6;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:.2s}'
+    + '.jv-orb svg{width:20px;height:20px}.jv-orb:hover{color:#f2f4ff;border-color:#eda93b}'
+    + '.jv-orb.on{color:#eda93b;border-color:#eda93b;box-shadow:0 0 14px rgba(237,169,59,.45)}'
+    + '.jv-orb.on.ascolta{animation:jvorb 1.8s ease-in-out infinite}.jv-orb.parla{background:rgba(237,169,59,.25);animation:jvorb .7s ease-in-out infinite}.jv-orb.pensa{animation:jvorb .4s ease-in-out infinite}'
+    + '@keyframes jvorb{50%{box-shadow:0 0 24px rgba(237,169,59,.9);transform:scale(1.08)}}'
+    + '.jv-voce{position:fixed;left:64px;bottom:48px;z-index:50;max-width:min(60vw,560px);padding:9px 14px;border-radius:10px;border:1px solid rgba(108,124,255,.35);background:rgba(2,2,26,.88);color:#f2f4ff;font:14px/1.35 Inter,Segoe UI,system-ui,sans-serif;opacity:0;pointer-events:none;transition:opacity .3s}'
+    + '.jv-voce.vis{opacity:1}.jv-voce.domanda{color:#9aa0d6}.jv-voce.risposta{border-color:#eda93b}.jv-voce.errore{color:#eda93b}';
+  document.head.appendChild(css);
+
+  const orb = document.createElement('button');
+  orb.className = 'jv-orb'; orb.type = 'button'; orb.title = 'Jarvis (tasto J)';
+  orb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+  const bolla = document.createElement('div'); bolla.className = 'jv-voce';
+  document.body.appendChild(orb); document.body.appendChild(bolla);
+
+  let tBolla = 0;
+  function mostra(testo, tipo) {
+    bolla.textContent = testo; bolla.className = 'jv-voce vis ' + (tipo || '');
+    clearTimeout(tBolla); tBolla = setTimeout(() => { bolla.classList.remove('vis'); }, Math.min(14000, 3500 + testo.length * 60));
+  }
+  function aggiornaOrb() {
+    orb.className = 'jv-orb' + (attivo ? ' on' : '') + (attivo && ascolta ? ' ascolta' : '') + (parla ? ' parla' : '') + (pensa ? ' pensa' : '');
+  }
+
+  function accendi() {
+    attivo = true; LS('inkasa_jarvis', '1'); aggiornaOrb();
+    if (TTS) { speechSynthesis.cancel(); }
+    precedente = istantanea();
+    if (SR) avviaAscolto();
+    di(SR ? 'Jarvis attivo. Dica Jarvis, seguito dalla domanda.' : 'Jarvis attivo. Annuncerò i nuovi ordini.');
+  }
+  function spegni() {
+    attivo = false; LS('inkasa_jarvis', '0');
+    if (TTS) speechSynthesis.cancel();
+    if (rec) { try { rec.stop(); } catch (e) {} }
+    parla = false; aggiornaOrb(); mostra('Jarvis spento.', 'risposta');
+  }
+  const commuta = () => (attivo ? spegni() : accendi());
+  orb.addEventListener('click', commuta);
+  orb.addEventListener('dblclick', (e) => e.stopPropagation()); // non attivare lo schermo intero
+  document.addEventListener('keydown', (e) => { if ((e.key === 'j' || e.key === 'J') && !e.ctrlKey && !e.metaKey && !e.altKey && !/input|textarea/i.test((e.target || {}).tagName || '')) commuta(); });
+
+  // se in jarvis.json c'è l'indirizzo del server, le domande non previste vanno a Claude
+  fetch('jarvis.json?t=' + Date.now(), {cache: 'no-store'}).then((r) => r.ok ? r.json() : {}).then((j) => { serverUrl = (j && j.url) || ''; }).catch(() => {});
+  setInterval(() => { if (attivo) controllaOrdini(); }, 5000);
+  if (LS('inkasa_jarvis') === '1') mostra('Tocca il microfono per riattivare Jarvis.', 'errore');
+})();
 </script>
 </body>
 </html>

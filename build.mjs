@@ -108,9 +108,12 @@ window.dash = (() => {
     return loading;
   }
   api.start = () => { render(); return load(); };
+  api.password = () => pwNow;
   return api;
 })();
 `;
+
+const jarvis = fs.readFileSync(new URL('./jarvis.js', import.meta.url), 'utf8');
 
 const html = `<!doctype html>
 <html lang="it">
@@ -134,6 +137,7 @@ const schermoIntero = () => { if (document.fullscreenElement) document.exitFulls
 document.addEventListener('dblclick', schermoIntero);
 document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) schermoIntero(); });
 </script>
+<script>${jarvis}</script>
 </body>
 </html>
 `;
