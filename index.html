@@ -997,7 +997,7 @@ document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F
 
   let attivo = false, parla = false, pensa = false, ascolta = false;
   let rec = null, finestraFino = 0, voce = null, serverUrl = '';
-  let precedente = null;
+  let precedente = null, alternative = [];
   const SITI = [ // [parole che lo richiamano, indirizzo, nome detto a voce]
     [/ordini/, 'https://admin.shopify.com/store/inkasaballs/orders', 'gli ordini di Shopify'],
     [/prodott/, 'https://admin.shopify.com/store/inkasaballs/products', 'i prodotti di Shopify'],
@@ -1109,10 +1109,10 @@ document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F
   }
   async function chiediAClaude(domanda) {
     const pw = dash.password ? dash.password() : '';
-    const r = await fetch(serverUrl, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Jarvis-Key': pw}, body: JSON.stringify({domanda, contesto: contesto(), storia: storia.slice(-6)})});
+    const r = await fetch(serverUrl, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Jarvis-Key': pw}, body: JSON.stringify({domanda, alternative: alternative.slice(0, 2), contesto: contesto(), storia: storia.slice(-6)})});
     if (r.status === 401) throw new Error('password');
     if (r.status === 429) throw new Error('limite');
-    if (!r.ok) throw new Error('server ' + r.status);
+    if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error('server ' + r.status + ' ' + (err.errore || '')); }
     const j = await r.json();
     const risp = String(j.risposta || '').slice(0, 800);
     storia.push({role: 'user', content: domanda}, {role: 'assistant', content: risp});
@@ -1134,9 +1134,8 @@ document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F
       pensa = true; aggiornaOrb();
       try { di(await chiediAClaude(testo)); }
       catch (e) {
-        const loc = risposteLocali(t);
-        if (loc && loc.dire) di(loc.dire);
-        else di(e.message === 'limite' ? 'Ho raggiunto il limite di domande per ora.' : e.message === 'password' ? 'Non sono autorizzato a rispondere.' : 'Non riesco a collegarmi a Claude in questo momento.');
+        console.warn('Jarvis:', e.message);
+        di(e.message === 'limite' ? 'Ho raggiunto il limite di domande per quest\'ora.' : e.message === 'password' ? 'Il server non riconosce la password della dashboard.' : 'Non riesco a raggiungere Claude in questo momento. Riprova tra poco.');
       }
       finally { pensa = false; aggiornaOrb(); }
       return;
@@ -1151,7 +1150,7 @@ document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F
   const WAKE = /\b(jarvis|giarvis|gervis|jarvi|garvis|giarvi)\b/;
   function avviaAscolto() {
     if (!SR || rec) return;
-    rec = new SR(); rec.lang = 'it-IT'; rec.continuous = true; rec.interimResults = false;
+    rec = new SR(); rec.lang = 'it-IT'; rec.continuous = true; rec.interimResults = false; rec.maxAlternatives = 3;
     rec.onstart = () => { ascolta = true; aggiornaOrb(); };
     rec.onend = () => { ascolta = false; aggiornaOrb(); rec = null; if (attivo && !parla) setTimeout(avviaAscolto, Math.max(400, mutoFino - Date.now())); };
     rec.onerror = (e) => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { mostra('Microfono non consentito: consenti l\'accesso al microfono per il sito.', 'errore'); LS('inkasa_jarvis_mic', 'no'); } };
@@ -1160,6 +1159,7 @@ document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
         if (!ev.results[i].isFinal) continue;
         const testo = ev.results[i][0].transcript.trim();
+        alternative = [...ev.results[i]].slice(1).map((a) => a.transcript.trim()).filter((a) => a && a !== testo);
         if (eEco(testo)) continue;
         const t = testo.toLowerCase();
         if (WAKE.test(t)) {
@@ -1210,7 +1210,15 @@ document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F
     + '.jv-jlabel{margin:0;font:600 clamp(10px,.8vw,15px) var(--jv-mono,ui-monospace,Menlo,Consolas,monospace);letter-spacing:.34em;text-transform:uppercase;color:var(--jv-cyan,#6c7cff)}'
     + '.jv-voce{margin:.3em 0 0;font-size:clamp(11px,.9vw,16px);line-height:1.35;letter-spacing:.03em;color:var(--jv-dim,#9aa0d6);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}'
     + '.jv-voce.domanda{color:#9aa0d6}.jv-voce.risposta{color:#f2f4ff}.jv-voce.errore{color:#eda93b}.jv-voce.attivo{color:#eda93b}'
-    + '.jv-jarvis.flottante{position:fixed;left:14px;bottom:46px;z-index:50;max-width:min(60vw,560px)}';
+    + '.jv-jarvis.flottante{position:fixed;left:14px;bottom:46px;z-index:50;max-width:min(60vw,560px)}'
+    + '.jv-cronobtn{flex:none;margin-left:auto;align-self:flex-start;background:none;border:1px solid rgba(108,124,255,.35);color:#9aa0d6;font:600 clamp(9px,.65vw,12px) ui-monospace,Menlo,Consolas,monospace;letter-spacing:.2em;text-transform:uppercase;padding:.45em .8em;cursor:pointer}'
+    + '.jv-cronobtn:hover{color:#f2f4ff;border-color:#eda93b}'
+    + '.jv-crono{position:fixed;inset:0;z-index:90;background:rgba(2,2,26,.92);display:flex;justify-content:center;align-items:flex-start;padding:5vh 3vw;overflow:auto;font-family:Inter,Segoe UI,system-ui,sans-serif;color:#f2f4ff}'
+    + '.jv-crono .box{width:min(900px,100%);border:1px solid rgba(108,124,255,.3);background:rgba(8,8,44,.95);padding:22px 26px}'
+    + '.jv-crono header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.jv-crono h2{margin:0;font:600 13px ui-monospace,Menlo,monospace;letter-spacing:.3em;text-transform:uppercase;color:#6c7cff}'
+    + '.jv-crono .x{background:none;border:1px solid rgba(108,124,255,.4);color:#f2f4ff;padding:6px 12px;cursor:pointer}'
+    + '.jv-crono .it{border-top:1px solid rgba(108,124,255,.18);padding:12px 0}.jv-crono .q{color:#9aa0d6;margin:0 0 4px}.jv-crono .a{margin:0}.jv-crono .err{color:#ff7a7a}'
+    + '.jv-crono .m{font:11px ui-monospace,Menlo,monospace;color:#6c7cff;letter-spacing:.06em;margin:0 0 6px}';
   document.head.appendChild(css);
 
   const orb = document.createElement('button');
@@ -1222,6 +1230,37 @@ document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F
   const etichetta = document.createElement('p'); etichetta.className = 'jv-jlabel'; etichetta.textContent = 'Jarvis';
   blocco.appendChild(etichetta); blocco.appendChild(bolla);
   modulo.appendChild(orb); modulo.appendChild(blocco);
+  const cronoBtn = document.createElement('button'); cronoBtn.type = 'button'; cronoBtn.className = 'jv-cronobtn'; cronoBtn.textContent = 'Cronologia';
+  cronoBtn.addEventListener('click', (e) => { e.stopPropagation(); apriCronologia(); });
+  cronoBtn.addEventListener('dblclick', (e) => e.stopPropagation());
+  modulo.appendChild(cronoBtn);
+  async function apriCronologia() { // conversazioni salvate sul server (ultime 100)
+    const ov = document.createElement('div'); ov.className = 'jv-crono';
+    const box = document.createElement('div'); box.className = 'box'; ov.appendChild(box);
+    const head = document.createElement('header'); const h = document.createElement('h2'); h.textContent = 'Cronologia di Jarvis';
+    const x = document.createElement('button'); x.className = 'x'; x.textContent = 'Chiudi'; x.onclick = () => ov.remove();
+    head.append(h, x); box.appendChild(head);
+    const lista = document.createElement('div'); lista.textContent = 'Carico…'; box.appendChild(lista);
+    ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
+    ov.addEventListener('dblclick', (e) => e.stopPropagation());
+    document.body.appendChild(ov);
+    try {
+      const r = await fetch(serverUrl.replace(/\/$/, '') + '/storia', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Jarvis-Key': dash.password ? dash.password() : ''}, body: '{}'});
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.errore || r.status);
+      lista.replaceChildren();
+      if (!j.voci || !j.voci.length) { lista.textContent = 'Ancora nessuna conversazione salvata.'; return; }
+      const fmt = new Intl.DateTimeFormat('it-IT', {day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'});
+      for (const v of j.voci) {
+        const it = document.createElement('div'); it.className = 'it';
+        const m = document.createElement('p'); m.className = 'm';
+        m.textContent = fmt.format(new Date(v.t)) + (v.strumenti && v.strumenti.length ? ' · ' + [...new Set(v.strumenti)].join(', ') : '') + (v.ms ? ' · ' + (v.ms / 1000).toFixed(1) + ' s' : '') + (v.cache ? ' · dalla cache' : '');
+        const q = document.createElement('p'); q.className = 'q'; q.textContent = '« ' + v.domanda + ' »';
+        const a = document.createElement('p'); a.className = 'a' + (v.errore ? ' err' : ''); a.textContent = v.errore ? 'Errore: ' + v.errore : v.risposta;
+        it.append(m, q, a); lista.appendChild(it);
+      }
+    } catch (e) { lista.textContent = 'Non riesco a caricare la cronologia (' + e.message + ').'; }
+  }
   const testata = document.getElementById('testata');
   const sys = testata && testata.querySelector('.jv-sys');
   if (testata && sys) testata.insertBefore(modulo, sys);
