@@ -1035,13 +1035,30 @@ document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F
   if (TTS) { scegliVoce(); speechSynthesis.onvoiceschanged = scegliVoce; }
 
   let audio = null, vocePro = true, mutoFino = 0, ultimaFrase = '';
+  // Su telefono il browser blocca l'audio che non parte da un tocco: lo sblocco al tocco con un AudioContext
+  // e poi riproduco tutto lì dentro. Su iPhone chiedo anche di suonare con l'interruttore del silenzioso attivo.
+  let ctxAudio = null, sorgente = null;
+  function sbloccaAudio() {
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC && !ctxAudio) ctxAudio = new AC();
+      if (ctxAudio) {
+        if (ctxAudio.state !== 'running') ctxAudio.resume();
+        const b = ctxAudio.createBuffer(1, 1, 22050), s = ctxAudio.createBufferSource();
+        s.buffer = b; s.connect(ctxAudio.destination); s.start(0);
+      }
+    } catch (e) {}
+    if (TTS) { try { const u = new SpeechSynthesisUtterance('.'); u.volume = 0; u.lang = 'it-IT'; speechSynthesis.speak(u); } catch (e) {} }
+  }
+  ['pointerdown', 'touchend', 'keydown'].forEach((ev) => document.addEventListener(ev, () => { if (!ctxAudio || ctxAudio.state !== 'running') sbloccaAudio(); }, {passive: true}));
   const parole = (x) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length > 2);
   function eEco(testo) { // la frase sentita è in gran parte la risposta appena detta da Jarvis?
     const a = parole(testo), b = new Set(parole(ultimaFrase));
     if (!a.length || !b.size) return false;
     return a.filter((w) => b.has(w)).length / a.length >= 0.5;
   }
-  function zittisci() { if (TTS) speechSynthesis.cancel(); if (audio) { try { audio.pause(); } catch (e) {} audio = null; } }
+  function zittisci() { if (TTS) speechSynthesis.cancel(); if (audio) { try { audio.pause(); } catch (e) {} audio = null; } if (sorgente) { try { sorgente.onended = null; sorgente.stop(); } catch (e) {} sorgente = null; } }
   function fine(dopo) { parla = false; mutoFino = Date.now() + 1000; aggiornaOrb(); finestraFino = Date.now() + 60000; riavviaAscolto(); if (dopo) dopo(); }
   function voceBrowser(testo, dopo) {
     if (!TTS) { fine(dopo); return; }
@@ -1062,7 +1079,15 @@ document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F
         const r = await fetch(serverUrl.replace(/\/$/, '') + '/voce', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Jarvis-Key': dash.password ? dash.password() : ''}, body: JSON.stringify({testo})});
         if (!r.ok) vocePro = false;
         if (!r.ok) throw new Error('voce ' + r.status);
-        const url = URL.createObjectURL(await r.blob());
+        const dati = await r.arrayBuffer();
+        if (ctxAudio && ctxAudio.state === 'running') { // percorso che funziona anche su telefono
+          const buf = await new Promise((ok, ko) => ctxAudio.decodeAudioData(dati.slice(0), ok, ko));
+          const s = ctxAudio.createBufferSource(); s.buffer = buf; s.connect(ctxAudio.destination); sorgente = s;
+          s.onended = () => { if (sorgente === s) sorgente = null; fine(dopo); };
+          s.start(0);
+          return;
+        }
+        const url = URL.createObjectURL(new Blob([dati], {type: 'audio/mpeg'}));
         const a = new Audio(url); audio = a;
         a.onended = a.onerror = () => { URL.revokeObjectURL(url); if (audio === a) audio = null; fine(dopo); };
         await a.play();
@@ -1290,7 +1315,7 @@ document.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F
     zittisci();
     precedente = istantanea();
     if (SR) avviaAscolto();
-    if (TTS) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } // sblocca l'audio senza parlare
+    sbloccaAudio(); // il tocco sulla sfera sblocca l'audio, anche su telefono
     mostra(SR ? 'Attivo · dì «Jarvis» e la domanda' : 'Attivo · annuncerò i nuovi ordini', 'attivo');
   }
   function spegni() {
